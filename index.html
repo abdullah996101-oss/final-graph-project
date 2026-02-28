@@ -43,16 +43,35 @@
     .btn.danger{color:#7f1d1d; background:rgba(239,68,68,.15); border-color:rgba(239,68,68,.35)}
     .hint{font-size:12px; color:var(--muted); line-height:1.7}
     .badge{padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:var(--chip)}
+
     .expr-list,.slider-list{display:grid; gap:10px}
     .card{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:10px; box-shadow:var(--shadow)}
-    .expr-card{display:grid; grid-template-columns:28px 1fr auto; gap:8px; align-items:center}
+
+    /* ========== تخطيط بطاقة الدالة على صفَّين ========== */
+    .expr-card{
+      display:grid;
+      grid-template-columns:28px 1fr;
+      grid-template-rows:auto auto;
+      grid-template-areas:
+        "color expr"
+        "tools tools";
+      gap:8px; align-items:center;
+    }
+    .expr-color{ grid-area: color; }
+    .expr-input{ grid-area: expr;  }
+    .expr-tools{ grid-area: tools; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+
     .input{width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:10px; font-size:14px; outline:none}
+    .input.expr{ min-height:38px; }
+    .input.expr::placeholder{ color: var(--muted); }
+
     .mini{display:flex; gap:6px; align-items:center}
     .icon-btn{background:transparent; border:0; color:var(--muted); cursor:pointer; font-size:16px}
     .icon-btn:hover{color:var(--danger)}
     .colorpick{appearance:none; -webkit-appearance:none; background:transparent; border:0; width:24px; height:24px; padding:0; cursor:pointer}
-    .lw{width:110px}
-    .lw-label{font-size:12px; color:var(--muted); min-width:36px; text-align:center}
+
+    .lw{ width:160px; }
+    .lw-label{ font-size:12px; color:var(--muted); min-width:36px; text-align:center }
 
     .canvas-wrap{position:relative; background:radial-gradient(1200px 600px at 100% 0%, rgba(34,211,238,.04), transparent 60%)}
     canvas{display:block; width:100%; height:100%; background:transparent}
@@ -99,8 +118,8 @@
       <div class="hint">
         <b>صيغ مدعومة:</b>
         <div>• صريحة: <span class="badge">ص = تعبير(س)</span> أو <span class="badge">تعبير(س) = ص</span></div>
-        <div>• خطية في ص (تُعزل تلقائيًا): <span class="badge">س + ص = 4</span>، <span class="badge">2س + ص = 5</span></div>
-        <div>• ضمنية: <span class="badge">س^2 + ص^2 = 9</span>، <span class="badge">س*ص = 1</span></div>
+        <div>• خطية في ص (تُعزل تلقائيًا): <span class="badge">س + ص = ٤</span>، <span class="badge">٢س + ص = ٥</span></div>
+        <div>• ضمنية: <span class="badge">س^2 + ص^2 = ٩</span>، <span class="badge">س*ص = ١</span></div>
         <div>• بارامترية: <span class="badge">س(t)=cos(t), ص(t)=sin(t) {0 ≤ t ≤ 2π}</span></div>
         <div>• قطبية: <span class="badge">r(θ)=1+cos(θ) {0 ≤ θ ≤ 2π}</span></div>
         <div>• منزلقات: <span class="badge">a, b, ...</span> تُستخدم داخل الدوال.</div>
@@ -136,23 +155,23 @@
 
 <script>
 (() => {
-  /* ---------- أدوات مساعدة ---------- */
+  /* ---------- أدوات ---------- */
   const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩"; const EN_DIGITS = "0123456789";
   const toArabicDigits  = s => String(s).replace(/[0-9]/g, d => AR_DIGITS[d]);
   const toEnglishDigits = s => String(s).replace(/[٠-٩]/g, ch => EN_DIGITS[AR_DIGITS.indexOf(ch)]).replace(/،/g, ',');
   const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name);
   const uid   = () => Math.random().toString(36).slice(2,9);
 
-  /* ---------- تحويل أسماء الدوال بالعربية ---------- */
+  /* ---------- دوال عربية -> Math ---------- */
   const arabicPairs = [
     [/\bجا\b/g,'sin'], [/\bجتا\b/g,'cos'], [/\bظا\b/g,'tan'],
     [/\bجذر\b/g,'sqrt'], [/\bقيمة_?مطلقة\b/g,'abs'],
     [/\bلو\b/g,'log'],   [/\bلن\b/g,'ln']
   ];
 
-  /* ---------- حالة التطبيق ---------- */
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
+  /* ---------- الحالة ---------- */
+  const canvas   = document.getElementById('canvas');
+  const ctx      = canvas.getContext('2d');
   const statusEl = document.getElementById('status');
   const tooltip  = document.getElementById('tooltip');
   const exprListEl   = document.getElementById('exprList');
@@ -171,10 +190,10 @@
     ],
     sliders:[],
     polylines:[],
-    touch:{active:false, lastDist:0, lastMid:null, lastTapTime:0, fingerCount:0}
+    touch:{active:false, lastDist:0, lastTapTime:0, fingerCount:0}
   };
 
-  /* ---------- تطبيع النص + الضرب الضمني ---------- */
+  /* ---------- تطبيع + ضرب ضمني ---------- */
   function preprocessBasic(s){
     s = toEnglishDigits(String(s))
       .replace(/[سx]/gi,'x').replace(/[صy]/gi,'y').replace(/[θϴ]/g,'theta')
@@ -199,47 +218,38 @@
   const containsY = s => /\by\b/i.test(String(s));
   const sideIsY   = raw => /^y$/i.test(preprocessBasic(raw).trim());
 
-  /* ---------- عزل y جبريًا إن كانت خطية ---------- */
+  /* ---------- عزل y (خطي) ---------- */
   function tryLinearSolveForY(lhsRaw, rhsRaw){
     const L0 = preprocessBasic(lhsRaw), R0 = preprocessBasic(rhsRaw);
-
     function solve(side, other){
       if (containsY(other)) return null;
       let m;
-      // a*y ± b
       m = side.match(/^(.+?)\*?y\s*([+\-])\s*(.+)$/i);
       if (m && !containsY(m[1]) && !containsY(m[3])) {
         const a=m[1].trim(), op=m[2], b=m[3].trim();
-        const numer = (op==='+') ? `(${other})-(${b})` : `(${other})+(${b})`;
+        const numer=(op==='+')?`(${other})-(${b})`:`(${other})+(${b})`;
         return `(${numer})/(${a})`;
       }
-      // y ± b
       m = side.match(/^y\s*([+\-])\s*(.+)$/i);
       if (m && !containsY(m[2])) {
         const op=m[1], b=m[2].trim();
-        return (op==='+') ? `(${other})-(${b})` : `(${other})+(${b})`;
+        return (op==='+')?`(${other})-(${b})`:`(${other})+(${b})`;
       }
-      // a*y
       m = side.match(/^(.+?)\*?y$/i);
       if (m && !containsY(m[1])) return `(${other})/(${m[1].trim()})`;
-      // y
       if (/^y$/i.test(side)) return `${other}`;
-      // other ± y
       m = side.match(/^(.+)\s*([+\-])\s*y$/i);
       if (m && !containsY(m[1])) {
         const otherOnSide=m[1].trim(), op=m[2];
-        return (op==='+') ? `(${other})-(${otherOnSide})` : `(${otherOnSide})-(${other})`;
+        return (op==='+')?`(${other})-(${otherOnSide})`:`(${otherOnSide})-(${other})`;
       }
-      // other ± a*y
       m = side.match(/^(.+)\s*([+\-])\s*(.+?)\*?y$/i);
       if (m && !containsY(m[1]) && !containsY(m[3])) {
         const otherOnSide=m[1].trim(), op=m[2], a=m[3].trim();
-        return (op==='+') ? `((${other})-(${otherOnSide}))/(${a})`
-                          : `((${otherOnSide})-(${other}))/(${a})`;
+        return (op==='+')?`((${other})-(${otherOnSide}))/(${a})`:`((${otherOnSide})-(${other}))/(${a})`;
       }
       return null;
     }
-
     let js = solve(R0, L0); if (js) return js;
     js = solve(L0, R0);    if (js) return js;
     return null;
@@ -296,7 +306,7 @@
     return { kind:'explicit', js: preprocessBasic(s), domain };
   }
 
-  /* ---------- تقييم داخل نطاق Math + المنزلقات ---------- */
+  /* ---------- تقييم ---------- */
   const isSafe = expr => /^[0-9+\-*/().,\sxa-zA-Z_]*\**[0-9+\-*/().,\sxa-zA-Z_]*$/.test(expr);
   function buildScope(vars){
     const scope = Object.create(Math);
@@ -310,7 +320,7 @@
   function makeFn2(js){ if(!js||!isSafe(js)) throw new Error('تعبير غير صالح'); return Function('x','y', `with(this){return (${js});}`).bind(buildScope()); }
   function evalInScope(expr, extra){ const s=preprocessBasic(expr); return Function(`with(this){return (${s});}`).bind(buildScope(extra))(); }
 
-  /* ---------- تحويل الإحداثيات ---------- */
+  /* ---------- تحويل إحداثيات ---------- */
   function worldToScreen(x,y){ const r=devicePixelRatio||1,w=canvas.width,h=canvas.height; return { x:(w/2)+(x-state.centerX)*state.scale*r, y:(h/2)-(y-state.centerY)*state.scale*r }; }
   function screenToWorld(sx,sy){ const r=devicePixelRatio||1,w=canvas.width,h=canvas.height; return { x:(sx-w/2)/(state.scale*r)+state.centerX, y:-(sy-h/2)/(state.scale*r)+state.centerY }; }
   function resizeCanvas(){ const r=devicePixelRatio||1,rect=canvas.getBoundingClientRect(); canvas.width=Math.max(1,Math.floor(rect.width*r)); canvas.height=Math.max(1,Math.floor(rect.height*r)); draw(); }
@@ -323,51 +333,45 @@
     ctx.clearRect(0,0,w,h);
     ctx.fillStyle = cssVar('--bg'); ctx.fillRect(0,0,w,h);
 
-    const step = niceStep(state.scale), sub = step/5, tl=screenToWorld(0,0), br=screenToWorld(w,h);
+    const step = niceStep(state.scale), sub = step/5, tl=screenToWorld(0,0), br=screenToWorld(w,0);
 
     // فرعية
     ctx.lineWidth=1; ctx.strokeStyle=cssVar('--grid-sub'); ctx.beginPath();
-    for(let x=Math.floor(tl.x/sub)*sub;x<=br.x;x+=sub){ const sx=worldToScreen(x,0).x; ctx.moveTo(sx+.5,0); ctx.lineTo(sx+.5,h); }
-    for(let y=Math.floor(br.y/sub)*sub;y<=tl.y;y+=sub){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
+    for(let x=Math.floor(tl.x/sub)*sub; x<=br.x; x+=sub){ const sx=worldToScreen(x,0).x; ctx.moveTo(sx+.5,0); ctx.lineTo(sx+.5,h); }
+    for(let y=Math.floor((screenToWorld(0,h).y)/sub)*sub; y<=screenToWorld(0,0).y; y+=sub){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
     ctx.stroke();
 
     // رئيسية
     ctx.strokeStyle=cssVar('--grid'); ctx.beginPath();
-    for(let x=Math.floor(tl.x/step)*step;x<=br.x;x+=step){ const sx=worldToScreen(x,0).x; ctx.moveTo(sx+.5,0); ctx.lineTo(sx+.5,h); }
-    for(let y=Math.floor(br.y/step)*step;y<=tl.y;y+=step){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
+    for(let x=Math.floor(tl.x/step)*step; x<=br.x; x+=step){ const sx=worldToScreen(x,0).x; ctx.moveTo(sx+.5,0); ctx.lineTo(sx+.5,h); }
+    for(let y=Math.floor((screenToWorld(0,h).y)/step)*step; y<=screenToWorld(0,0).y; y+=step){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
     ctx.stroke();
 
     // محاور
     ctx.strokeStyle=cssVar('--axis'); ctx.lineWidth=1.5; ctx.beginPath();
     const sx0=worldToScreen(0,0).x, sy0=worldToScreen(0,0).y; ctx.moveTo(sx0+.5,0); ctx.lineTo(sx0+.5,h); ctx.moveTo(0,sy0+.5); ctx.lineTo(w,sy0+.5); ctx.stroke();
 
-    // تسميات المحاور
+    // تسميات
     ctx.fillStyle = cssVar('--axis');
     ctx.font = `${12*r}px system-ui, -apple-system, Segoe UI, Noto Sans Arabic, Arial`;
     ctx.textAlign='right'; ctx.textBaseline='top'; ctx.fillText('س', Math.min(w-6,w-6), sy0 + 6);
-    ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('ص', sx0 + 6, Math.max(12,12));
+    ctx.textAlign='left';  ctx.textBaseline='bottom'; ctx.fillText('ص', sx0 + 6, Math.max(12,12));
 
-    // أرقام التدريج
-    ctx.fillStyle=cssVar('--muted');
-
-    // (أرقام محور س) تبقى تحت المحور
-    ctx.textAlign='right'; ctx.textBaseline='top';
-    for(let x=Math.floor(tl.x/step)*step;x<=br.x;x+=step){
+    // أرقام س (تحت المحور)
+    ctx.fillStyle=cssVar('--muted'); ctx.textAlign='right'; ctx.textBaseline='top';
+    for(let x=Math.floor(tl.x/step)*step; x<=br.x; x+=step){
       if(Math.abs(x)<1e-12) continue;
-      const p=worldToScreen(x,0);
-      ctx.fillText(toArabicDigits(x.toFixed(2).replace(/\.00$/,'')), p.x-4, sy0+6);
+      const p=worldToScreen(x,0); ctx.fillText(toArabicDigits(x.toFixed(2).replace(/\.00$/,'')), p.x-4, sy0+6);
     }
-
-    // (أرقام محور ص) **إلى يسار** المحور ص
+    // أرقام ص (على يسار محور ص)
     ctx.textAlign='right'; ctx.textBaseline='bottom';
-    for(let y=Math.floor(br.y/step)*step;y<=tl.y;y+=step){
+    for(let y=Math.floor((screenToWorld(0,h).y)/step)*step; y<=screenToWorld(0,0).y; y+=step){
       if(Math.abs(y)<1e-12) continue;
-      const p=worldToScreen(0,y);
-      ctx.fillText(toArabicDigits(y.toFixed(2).replace(/\.00$/,'')), sx0 - 6, p.y - 2);
+      const p=worldToScreen(0,y); ctx.fillText(toArabicDigits(y.toFixed(2).replace(/\.00$/,'')), sx0 - 6, p.y - 2);
     }
   }
 
-  /* ---------- رسم المنحنيات ---------- */
+  /* ---------- رسم ---------- */
   function adaptiveSampleX(f,left,right){
     const pts=[], maxDepth=12, eps=1e-2, N0=25;
     function rec(a,b,ya,yb,d){ const m=(a+b)/2; let ym=f(m); if(!isFinite(ya)) ya=f(a); if(!isFinite(yb)) yb=f(b);
@@ -446,7 +450,7 @@
     }
   }
 
-  /* ---------- تقاطعات تقريبية ---------- */
+  /* ---------- تقاطعات ---------- */
   function segInter(p,q,r,s){
     function cross(a,b,c){ return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]); }
     const d=cross(p,q,r), e=cross(p,q,s), f=cross(r,s,p), g=cross(r,s,q);
@@ -489,56 +493,68 @@
     showTooltip(S.x,S.y, `النقطة الأقرب≈ (س=${bestP[0].toFixed(3)}, ص=${bestP[1].toFixed(3)}), الميل m≈ ${slope.toFixed(3)}`);
   }
 
+  /* ---------- حلقة الرسم ---------- */
   function draw(){ drawGrid(); drawPolylines(); drawIntersections(); updateStatus(); }
 
-  /* ---------- واجهة الدوال (لون + منزلق سمك + إدخال عربي للأرقام) ---------- */
+  /* ---------- واجهة الدوال (لون + منزلق سمك + إدخال عربي) ---------- */
   function renderExprList(){
     exprListEl.innerHTML='';
     state.expressions.forEach((ex,idx)=>{
-      const card=document.createElement('div'); card.className='card expr-card'; card.dataset.id=ex.id;
+      const card=document.createElement('div');
+      card.className='card expr-card';
+      card.dataset.id=ex.id;
 
-      // منتقي اللون
-      const col=document.createElement('input'); col.type='color'; col.className='colorpick'; col.value=ex.color||COLORS[idx%COLORS.length];
+      // 🎨 اللون
+      const col=document.createElement('input');
+      col.type='color'; col.className='colorpick expr-color';
+      col.value=ex.color||COLORS[idx%COLORS.length];
       col.addEventListener('input',()=>{ ex.color=col.value; draw(); persistDeb(); });
       card.appendChild(col);
 
-      // حقل المعادلة (تحويل أرقام المدخل إلى عربية مباشرة)
-      const inp=document.createElement('input'); inp.className='input';
-      inp.placeholder='مثال: ص = س^2 | س + ص = 4 | 2س + ص = 5 | س*ص = 1';
+      // 📝 الحقل
+      const inp=document.createElement('input');
+      inp.className='input expr expr-input';
+      inp.placeholder='مثال: ص = س^2 | س + ص = ٤ | ٢س + ص = ٥ | س*ص = ١';
       inp.value=ex.text||'';
-      // عند الكتابة: حوِّل أي أرقام لاتينية إلى عربية **في العرض**
       inp.addEventListener('input', () => {
-        const caretStart = inp.selectionStart, caretEnd = inp.selectionEnd;
-        const before = inp.value;
-        const converted = toArabicDigits(before);
-        if (before !== converted) {
-          inp.value = converted;
-          // نفس الطول → لا نغيّر المؤشر
-          inp.setSelectionRange(caretStart, caretEnd);
+        const start=inp.selectionStart, end=inp.selectionEnd;
+        const before=inp.value, after=toArabicDigits(before);
+        if (before!==after) {
+          inp.value=after;
+          // نفس الطول (استبدال رقم برقم) => المؤشر يظل كما هو
+          inp.setSelectionRange(start, end);
         }
-        ex.text = inp.value; // نخزّن النص بصيغته العربية، والمفسّر سيحوّله داخليًا إلى إنجليزي للتقييم
+        ex.text = inp.value;
         draw(); persistDeb();
       });
       card.appendChild(inp);
 
-      // أدوات: منزلق سمك + عرض قيمته بالعربية + إظهار/إخفاء + حذف
-      const tools=document.createElement('div'); tools.className='mini';
+      // 🔧 الأدوات (صفّ ثانٍ)
+      const tools=document.createElement('div');
+      tools.className='expr-tools';
 
-      const lw=document.createElement('input'); lw.type='range'; lw.min='0.5'; lw.max='12'; lw.step='0.5'; lw.value=ex.width||2; lw.className='lw';
-      const lwVal=document.createElement('span'); lwVal.className='lw-label'; lwVal.textContent=toArabicDigits((ex.width||2).toString());
+      const lw=document.createElement('input');
+      lw.type='range'; lw.min='0.5'; lw.max='12'; lw.step='0.5';
+      lw.value=ex.width||2; lw.className='lw';
+      const lwVal=document.createElement('span');
+      lwVal.className='lw-label'; lwVal.textContent=toArabicDigits((ex.width||2).toString());
       lw.addEventListener('input',()=>{ const v=Math.max(0.5, Math.min(12, parseFloat(lw.value)||2)); ex.width=v; lwVal.textContent=toArabicDigits(v.toString()); draw(); persistDeb(); });
 
-      const vis=document.createElement('input'); vis.type='checkbox'; vis.checked=ex.visible!==false; vis.title='إظهار/إخفاء';
+      const vis=document.createElement('input');
+      vis.type='checkbox'; vis.checked=ex.visible!==false; vis.title='إظهار/إخفاء';
       vis.addEventListener('change',()=>{ ex.visible=vis.checked; draw(); persistDeb(); });
 
-      const del=document.createElement('button'); del.className='icon-btn'; del.title='حذف'; del.textContent='🗑️';
+      const del=document.createElement('button');
+      del.className='icon-btn'; del.title='حذف'; del.textContent='🗑️';
       del.addEventListener('click',()=>{ state.expressions=state.expressions.filter(it=>it.id!==ex.id); renderExprList(); draw(); persistDeb(); });
 
       tools.appendChild(document.createTextNode('سمك'));
-      tools.appendChild(lw); tools.appendChild(lwVal);
-      tools.appendChild(vis); tools.appendChild(del);
-      card.appendChild(tools);
+      tools.appendChild(lw);
+      tools.appendChild(lwVal);
+      tools.appendChild(vis);
+      tools.appendChild(del);
 
+      card.appendChild(tools);
       exprListEl.appendChild(card);
     });
   }
@@ -564,6 +580,7 @@
       del.onclick=()=>{ state.sliders.splice(idx,1); renderSliders(); draw(); persistDeb(); };
 
       row.appendChild(name); row.appendChild(range); row.appendChild(val); row.appendChild(del);
+
       const row2=document.createElement('div'); row2.className='mini'; row2.style.gap='6px';
       const lmin=document.createElement('input'); lmin.className='input'; lmin.style.width='80px'; lmin.value=sl.min;
       const lstep=document.createElement('input'); lstep.className='input'; lstep.style.width='80px'; lstep.value=sl.step;
@@ -581,7 +598,7 @@
     });
   }
 
-  /* ---------- تفاعل الماوس/الجوال ---------- */
+  /* ---------- تفاعل الماوس/اللمس ---------- */
   canvas.addEventListener('mousemove', (e)=>{ const rect=canvas.getBoundingClientRect(), r=devicePixelRatio||1; const sx=(e.clientX-rect.left)*r, sy=(e.clientY-rect.top)*r; const w=screenToWorld(sx,sy);
     state.mouse={x:sx,y:sy,wx:w.x,wy:w.y};
     if(state.dragging){ const dx=(sx-state.dragStart.x)/(state.scale*r), dy=(sy-state.dragStart.y)/(state.scale*r); state.centerX=state.dragStart.cx-dx; state.centerY=state.dragStart.cy+dy; draw(); } else updateStatus();
@@ -592,7 +609,7 @@
   canvas.addEventListener('dblclick', ()=>{ resetView(); draw(); persistDeb(); });
   canvas.addEventListener('click', (e)=>{ if(e.altKey){ const w=screenToWorld(state.mouse.x, state.mouse.y); draw(); drawTangentAt(w.x,w.y); } });
 
-  // لمس الجوال (سحب بإصبع، قرص بإصبعين، نقرتان لإعادة الضبط)
+  // لمس
   canvas.addEventListener('touchstart', (e)=>{
     if(e.touches.length===1){
       const t=e.touches[0], rect=canvas.getBoundingClientRect(), r=devicePixelRatio||1;
@@ -616,7 +633,7 @@
   }, {passive:true});
   window.addEventListener('touchend', ()=>{ state.touch.active=false; state.dragging=false; state.touch.fingerCount=0; persistDeb(); }, {passive:true});
 
-  /* ---------- أزرار عامة ---------- */
+  /* ---------- أزرار ---------- */
   document.getElementById('btnDrawer').onclick=()=>{ sidebarEl.classList.toggle('open'); };
   document.getElementById('btnAdd').onclick = ()=>{ state.expressions.push({ id:uid(), color: COLORS[state.expressions.length%COLORS.length], width:2, text:'', visible:true }); renderExprList(); };
   document.getElementById('btnAddSlider').onclick=()=>{ state.sliders.push({ name:`a${state.sliders.length+1}`, min:-5, max:5, step:0.1, value:1 }); renderSliders(); draw(); };
@@ -632,7 +649,7 @@
   /* ---------- حالة/مشاركة ---------- */
   function updateStatus(){ statusEl.textContent = `س = ${toArabicDigits(state.mouse.wx.toFixed(3))}, ص = ${toArabicDigits(state.mouse.wy.toFixed(3))} | مقياس: 1u ≈ ${Math.round(state.scale)}px`; }
   function flash(msg){ const old=statusEl.textContent; statusEl.textContent=msg; setTimeout(()=>statusEl.textContent=old, 1200); }
-  function serialize(){ return { v:6, cx:state.centerX, cy:state.centerY, sc:state.scale, theme:state.theme, expr: state.expressions.map(e=>({t:e.text,c:e.color,w:e.width,v:!!e.visible})), sliders: state.sliders }; }
+  function serialize(){ return { v:7, cx:state.centerX, cy:state.centerY, sc:state.scale, theme:state.theme, expr: state.expressions.map(e=>({t:e.text,c:e.color,w:e.width,v:!!e.visible})), sliders: state.sliders }; }
   function deserialize(o){
     if(!o) return;
     if(typeof o.cx==='number') state.centerX=o.cx;
