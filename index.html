@@ -193,23 +193,23 @@
 
   /* ---------- تنظيف شديد + تطبيع + ضرب ضمني ---------- */
   function stripBiDiAndMarks(s){
-    // إزالة محارف الاتجاه/التحكم + تشكيل + مدّ
+    // BiDi controls + تشكيل + مدّ
     return String(s)
-      .replace(/[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/g,'')                // BiDi controls
-      .replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g,'')              // تَشكيل
-      .replace(/\u0640/g,'');                                                      // ـ (مد)
+      .replace(/[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/g,'')
+      .replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g,'')
+      .replace(/\u0640/g,'');
   }
 
   function preprocessBasic(s){
     s = stripBiDiAndMarks(s);
 
-    // توحيد علامات +/- غير القياسية
+    // توحيد +/- غير القياسية
     s = s.replace(/[−–—－]/g, '-').replace(/＋/g, '+');
 
     // أرقام عربية -> إنجليزية + فاصلة عربية
     s = toEnglishDigits(s).replace(/،/g, ',');
 
-    // متغيرات ورموز (أولوية: استبدال الحروف العربية)
+    // متغيرات ورموز (ابدأ بالعربية ثم وحّد الحالة)
     s = s
       .replace(/س/gi,'x')
       .replace(/ص/gi,'y')
@@ -229,17 +229,11 @@
     // إدخال الضرب الضمني
     const FN='(sin|cos|tan|sqrt|abs|log)';
     s = s
-      // رقم قبل متغير/قوس
       .replace(/(\d)\s*(x|y|theta|t|PI|E|\()/gi,'$1*$2')
-      // متغير/قوس قبل رقم/قوس
       .replace(/(x|y|theta|t|PI|E|\))\s*(\d|\()/gi,'$1*$2')
-      // قبل دالة
       .replace(new RegExp(`(\\d|x|y|theta|t|PI|E)\\s*${FN}`,'gi'),'$1*$2')
-      // ) قبل دالة
       .replace(new RegExp(`\\)\\s*${FN}`,'gi'),')*$1')
-      // )(
       .replace(/\)\s*\(/g, ')*(')
-      // xPI أو PIx
       .replace(/(x|y|theta|t)\s*(PI|E)/gi,'$1*$2')
       .replace(/(PI|E)\s*(x|y|theta|t)/gi,'$1*$2');
 
@@ -514,6 +508,7 @@
           ctx.stroke();
         }
         else if(spec.kind==='implicit'){
+          // محاولة عزل عددي y(x) إذا كانت خطية في y
           const F = (()=>{ const eq = spec.eq.replace('=','-(')+')'; return makeFn2(eq); })();
           function yFromLinear(x){
             const b = F(x, 0);
@@ -526,7 +521,8 @@
           const f = (x)=> yFromLinear(x);
           const ptsExplicit = adaptiveSampleX(f, viewL, viewR);
 
-          if (ptsExplicit.length >= 20) {
+          // يكفي نقطتان بدل 20
+          if (ptsExplicit.length >= 2) {
             ctx.beginPath(); let pen=false;
             for (const [x,y] of ptsExplicit){
               const p=worldToScreen(x,y);
@@ -593,7 +589,7 @@
     if((d===0&&e===0&&f===0&&g===0)) return null;
     if((d>0)!=(e>0) && (f>0)!=(g>0)){
       const A=q[0]-p[0], B=r[0]-s[0], C=q[1]-p[1], D=r[1]-s[1], E=r[0]-p[0], F=r[1]-p[1];
-      const det=A*D-B*C; if(Math.abs(det)<1e-12) return null; const t=(E*D-B*F)/det; return [p[0]+t*A, p[1]+t+C];
+      const det=A*D-B*C; if(Math.abs(det)<1e-12) return null; const t=(E*D-B*F)/det; return [p[0]+t*A, p[1]+t*C];
     }
     return null;
   }
@@ -759,7 +755,7 @@
   document.getElementById('btnDrawer').onclick=()=>{ sidebarEl.classList.toggle('open'); };
   document.getElementById('btnAdd').onclick = ()=>{ state.expressions.push({ id:uid(), color: COLORS[state.expressions.length%COLORS.length], width:2, text:'', visible:true }); renderExprList(); };
   document.getElementById('btnAddSlider').onclick=()=>{ state.sliders.push({ name:`a${state.sliders.length+1}`, min:-5, max:5, step:0.1, value:1 }); renderSliders(); draw(); };
-  document.getElementById('btnExport').onclick=()=>{ const url=canvas.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='graph.png'; a.click(); };
+  document.getElementById('btnExport').onclick=()=>{ const url=canvas.toDataURL('image/png'); const a=document.createElement('a'); a.href=url; a.download='graph.png'; a.click(); />;
   document.getElementById('btnReset').onclick = ()=>{ resetView(); draw(); persistDeb(); };
   document.getElementById('btnZoomIn').onclick = ()=> zoomAt(1.12, state.mouse.x, state.mouse.y);
   document.getElementById('btnZoomOut').onclick= ()=> zoomAt(1/1.12, state.mouse.x, state.mouse.y);
