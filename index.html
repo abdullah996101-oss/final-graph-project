@@ -239,71 +239,74 @@
   }
 
   /* ---------- عزل y جبريًا (نسخة أقوى) ---------- */
-  function tryLinearSolveForY(lhsRaw, rhsRaw){
-    let L0 = stripOuterParens(preprocessBasic(lhsRaw));
-    let R0 = stripOuterParens(preprocessBasic(rhsRaw));
+ function tryLinearSolveForY(lhsRaw, rhsRaw){
+  // طَبِّع وأزل الأقواس الخارجية
+  let L0 = stripOuterParens(preprocessBasic(lhsRaw));
+  let R0 = stripOuterParens(preprocessBasic(rhsRaw));
 
-    function solve(side, other){
-      side  = stripOuterParens(side);
-      other = stripOuterParens(other);
-      if (containsY(other)) return null;
+  function solve(side, other){
+    side  = stripOuterParens(String(side || '').trim());
+    other = stripOuterParens(String(other || '').trim());
+    if (containsY(other)) return null; // الطرف المقابل لا يجب أن يحتوي y
 
-      const noY = s => !containsY(s);
-      let m;
+    const noY = s => !containsY(s);
+    let m;
 
-      // (a)*y ± b  أو  a*y ± b
-      m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y\s*([+\-])\s*(.+)$/i);
-      if (m) {
-        const a = (m[1] ?? m[2] ?? '').trim(), op = m[3], b = m[4].trim();
-        if (noY(a) && noY(b)) {
-          const numer = op === '+' ? `(${other})-(${b})` : `(${other})+(${b})`;
-          return `(${numer})/(${a})`;
-        }
+    // 1) (a)*y ± b  أو  a*y ± b
+    m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y\s*([+\-])\s*(.+)\s*$/i);
+    if (m) {
+      const a = (m[1] ?? m[2] ?? '').trim(), op = m[3], b = m[4].trim();
+      if (noY(a) && noY(b)) {
+        const numer = op === '+' ? `(${other})-(${b})` : `(${other})+(${b})`;
+        return `(${numer})/(${a})`;
       }
-
-      // y ± b
-      m = side.match(/^y\s*([+\-])\s*(.+)$/i);
-      if (m) {
-        const op = m[1], b = m[2].trim();
-        if (noY(b)) return op === '+' ? `(${other})-(${b})` : `(${other})+(${b})`;
-      }
-
-      // (a)*y  أو  a*y
-      m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y$/i);
-      if (m) {
-        const a = (m[1] ?? m[2] ?? '').trim();
-        if (noY(a)) return `(${other})/(${a})`;
-      }
-
-      // y فقط
-      if (/^y$/i.test(side)) return `${other}`;
-
-      // other ± y
-      m = side.match(/^(.+)\s*([+\-])\s*(?:\(?\s*y\s*\)?)$/i);
-      if (m) {
-        const otherOnSide = stripOuterParens(m[1].trim()), op = m[2];
-        if (noY(otherOnSide)) return op === '+' ? `(${other})-(${otherOnSide})` : `(${otherOnSide})-(${other})`;
-      }
-
-      // other ± (a*y)
-      m = side.match(/^(.+)\s*([+\-])\s*\(?(?:\((.+?)\)|(.+?))\s*\*?\s*y\)?$/i);
-      if (m) {
-        const otherOnSide = stripOuterParens(m[1].trim()), op = m[2], a = stripOuterParens((m[3] ?? m[4] ?? '').trim());
-        if (noY(otherOnSide) && noY(a)) {
-          return op === '+'
-            ? `((${other})-(${otherOnSide}))/(${a})`
-            : `((${otherOnSide})-(${other}))/(${a})`;
-        }
-      }
-      return null;
     }
 
-    // جرّب y في الطرف الأيمن ثم الأيسر
-    let js = solve(R0, L0); if (js) return js;
-    js = solve(L0, R0);     if (js) return js;
+    // 2) y ± b
+    m = side.match(/^\(?\s*y\s*\)?\s*([+\-])\s*(.+)\s*$/i);
+    if (m) {
+      const op = m[1], b = m[2].trim();
+      if (noY(b)) return op === '+' ? `(${other})-(${b})` : `(${other})+(${b})`;
+    }
+
+    // 3) (a)*y  أو  a*y
+    m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y\s*$/i);
+    if (m) {
+      const a = (m[1] ?? m[2] ?? '').trim();
+      if (noY(a)) return `(${other})/(${a})`;
+    }
+
+    // 4) y فقط
+    if (/^\(?\s*y\s*\)?$/i.test(side)) return `${other}`;
+
+    // 5) other ± y  ← ✅ صارت متسامحة للمسافات/الأقواس/RTL
+    m = side.match(/^(.+?)\s*([+\-])\s*\(?\s*y\s*\)?\s*$/i);
+    if (m) {
+      const otherOnSide = stripOuterParens(m[1].trim()), op = m[2];
+      if (noY(otherOnSide))
+        return op === '+' ? `(${other})-(${otherOnSide})` : `(${otherOnSide})-(${other})`;
+    }
+
+    // 6) other ± (a*y)  ← ✅ أيضًا متسامحة
+    m = side.match(/^(.+?)\s*([+\-])\s*\(?(?:\((.+?)\)|(.+?))\s*\*?\s*y\)?\s*$/i);
+    if (m) {
+      const otherOnSide = stripOuterParens(m[1].trim()), op = m[2];
+      const a = stripOuterParens((m[3] ?? m[4] ?? '').trim());
+      if (noY(otherOnSide) && noY(a)) {
+        return op === '+'
+          ? `((${other})-(${otherOnSide}))/(${a})`
+          : `((${otherOnSide})-(${other}))/(${a})`;
+      }
+    }
+
     return null;
   }
 
+  // جرّب عندما تكون y في الطرف الأيمن ثم الأيسر
+  let js = solve(R0, L0); if (js) return js;
+  js = solve(L0, R0);     if (js) return js;
+  return null;
+}
   /* ---------- مجال {} ---------- */
   function extractDomain(raw){
     const m = raw.match(/\{([^}]*)\}/);
