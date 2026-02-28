@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -7,7 +6,6 @@
   <title>آلة رسم بياني (س/ص) – النسخة النهائية</title>
   <style>
     :root{
-      /* داكن (افتراضي) */
       --bg:#0b1220; --panel:#0f172a; --panel-2:#111827; --text:#e5e7eb;
       --muted:#9fb2c9; --grid-sub:#162133; --grid:#20314b; --axis:#93c5fd;
       --accent:#22d3ee; --danger:#ef4444; --ok:#22c55e; --warn:#f59e0b;
@@ -15,7 +13,6 @@
       --sidebar-w:380px; --z-drawer:20; --z-fab:15; --z-status:10;
     }
     :root.light{
-      /* فاتح */
       --bg:#f8fafc; --panel:#ffffff; --panel-2:#f3f4f6; --text:#0f172a;
       --muted:#475569; --grid-sub:#e5e7eb; --grid:#cbd5e1; --axis:#1f2937;
       --accent:#0ea5e9; --danger:#dc2626; --ok:#16a34a; --warn:#d97706;
@@ -48,7 +45,7 @@
     .expr-list,.slider-list{display:grid; gap:10px}
     .card{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:10px; box-shadow:var(--shadow)}
 
-    /* ========== بطاقة الدالة صفَّين: لون+إدخال ثم الأدوات ========== */
+    /* بطاقة الدالة: صفّان (لون + إدخال) ثم الأدوات */
     .expr-card{
       display:grid;
       grid-template-columns:28px 1fr;
@@ -122,7 +119,7 @@
         <div>• خطية في ص (تُعزل تلقائيًا): <span class="badge">س + ص = ٤</span>، <span class="badge">٢س + ص = ٥</span></div>
         <div>• ضمنية: <span class="badge">س^2 + ص^2 = ٩</span>، <span class="badge">س*ص = ١</span></div>
         <div>• بارامترية: <span class="badge">س(t)=cos(t), ص(t)=sin(t) {0 ≤ t ≤ 2π}</span></div>
-        <div>• قطبية: <span class="badge">r(θ)=1+cos(θ) {0 ≤ θ ≤ 2π}</span></div>
+        <div>• قطبية: <span class="badge">r(θ)=1+cos(θ) {0 ≤ 2π}</span></div>
         <div>• منزلقات: <span class="badge">a, b, ...</span> تُستخدم داخل الدوال.</div>
         دوال عربية: <span class="badge">جا</span>، <span class="badge">جتا</span>، <span class="badge">ظا</span>، <span class="badge">جذر</span>، <span class="badge">لن</span>، <span class="badge">لو</span>.
       </div>
@@ -194,148 +191,128 @@
     touch:{active:false, lastDist:0, lastTapTime:0, fingerCount:0}
   };
 
-  /* ---------- تطبيع + ضرب ضمني ---------- */
+  /* ---------- تنظيف شديد + تطبيع + ضرب ضمني ---------- */
+  function stripBiDiAndMarks(s){
+    // إزالة محارف الاتجاه/التحكم + تشكيل + مدّ
+    return String(s)
+      .replace(/[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/g,'')                // BiDi controls
+      .replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g,'')              // تَشكيل
+      .replace(/\u0640/g,'');                                                      // ـ (مد)
+  }
+
   function preprocessBasic(s){
-  // 0) تأكد أنها سلسلة
-  s = String(s);
+    s = stripBiDiAndMarks(s);
 
-  // 1) إزالة محارف الاتجاه/التحكم غير المرئية التي تسبب فشل الـRegex/التقييم
-  //   U+200E, U+200F, U+061C, U+202A..U+202E, U+2066..U+2069
-  s = s.replace(/[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/g, '');
+    // توحيد علامات +/- غير القياسية
+    s = s.replace(/[−–—－]/g, '-').replace(/＋/g, '+');
 
-  // 2) تطبيع العلامات إلى ASCII
-  //   − (U+2212), – (en dash), — (em dash), － (fullwidth minus)
-  s = s.replace(/[−–—－]/g, '-');
-  //   ＋ (fullwidth plus)
-  s = s.replace(/＋/g, '+');
+    // أرقام عربية -> إنجليزية + فاصلة عربية
+    s = toEnglishDigits(s).replace(/،/g, ',');
 
-  // 3) أرقام عربية -> إنجليزية + فاصلة عربية -> إنجليزية
-  s = toEnglishDigits(s).replace(/،/g, ',');
+    // متغيرات ورموز (أولوية: استبدال الحروف العربية)
+    s = s
+      .replace(/س/gi,'x')
+      .replace(/ص/gi,'y')
+      .replace(/[xX]/g,'x')
+      .replace(/[yY]/g,'y')
+      .replace(/[θϴ]/g,'theta')
+      .replace(/π|باي/gi,'PI')
+      .replace(/هـ/g,'E')
+      .replace(/[÷]/g,'/')
+      .replace(/[×]/g,'*')
+      .replace(/\^/g,'**');
 
-  // 4) تطبيع الرموز والمتغيرات
-  s = s
-    .replace(/[سx]/gi,'x')
-    .replace(/[صy]/gi,'y')
-    .replace(/[θϴ]/g,'theta')
-    .replace(/π|باي/gi,'PI')
-    .replace(/هـ/g,'E')
-    .replace(/[÷]/g,'/')
-    .replace(/[×]/g,'*')
-    .replace(/\^/g,'**');
+    // أسماء الدوال العربية
+    arabicPairs.forEach(([re, rep]) => { s = s.replace(re, rep); });
+    s = s.replace(/\bln\(/g,'log(');
 
-  // 5) ترجمة أسماء الدوال العربية
-  arabicPairs.forEach(([re, rep]) => { s = s.replace(re, rep); });
-  s = s.replace(/\bln\(/g, 'log('); // ln -> log
+    // إدخال الضرب الضمني
+    const FN='(sin|cos|tan|sqrt|abs|log)';
+    s = s
+      // رقم قبل متغير/قوس
+      .replace(/(\d)\s*(x|y|theta|t|PI|E|\()/gi,'$1*$2')
+      // متغير/قوس قبل رقم/قوس
+      .replace(/(x|y|theta|t|PI|E|\))\s*(\d|\()/gi,'$1*$2')
+      // قبل دالة
+      .replace(new RegExp(`(\\d|x|y|theta|t|PI|E)\\s*${FN}`,'gi'),'$1*$2')
+      // ) قبل دالة
+      .replace(new RegExp(`\\)\\s*${FN}`,'gi'),')*$1')
+      // )(
+      .replace(/\)\s*\(/g, ')*(')
+      // xPI أو PIx
+      .replace(/(x|y|theta|t)\s*(PI|E)/gi,'$1*$2')
+      .replace(/(PI|E)\s*(x|y|theta|t)/gi,'$1*$2');
 
-  // 6) إدخال الضرب الضمني
-  const FN = '(sin|cos|tan|sqrt|abs|log)';
-  s = s
-    // رقم قبل متغير/قوس
-    .replace(/(\d)\s*(x|y|theta|t|PI|E|\()/gi, '$1*$2')
-    // متغير/قوس قبل رقم/قوس
-    .replace(/(x|y|theta|t|PI|E|\))\s*(\d|\()/gi, '$1*$2')
-    // قبل دالة
-    .replace(new RegExp(`(\\d|x|y|theta|t|PI|E)\\s*${FN}`,'gi'), '$1*$2')
-    // ) قبل دالة
-    .replace(new RegExp(`\\)\\s*${FN}`,'gi'), ')*$1')
-    // )(
-    .replace(/\)\s*\(/g, ')*(')
-    // xPI أو PIx
-    .replace(/(x|y|theta|t)\s*(PI|E)/gi, '$1*$2')
-    .replace(/(PI|E)\s*(x|y|theta|t)/gi, '$1*$2');
+    return s.replace(/\s+/g,' ').trim();
+  }
 
-  // 7) تنظيف المسافات
-  return s.replace(/\s+/g, ' ').trim();
-}
-  /* ---------- إزالة أقواس خارجية زائدة ---------- */
+  const containsY = s => /\by\b/i.test(String(s));
+  const sideIsY   = raw => /^\(?\s*y\s*\)?$/i.test(preprocessBasic(raw).trim());
+
   function stripOuterParens(s){
     s = String(s).trim();
     if (!s) return s;
     while (s.startsWith('(') && s.endsWith(')')) {
-      let depth = 0, ok = true;
-      for (let i = 0; i < s.length; i++) {
-        const ch = s[i];
-        if (ch === '(') depth++;
-        else if (ch === ')') depth--;
-        if (depth === 0 && i < s.length - 1) { ok = false; break; }
-        if (depth < 0) { ok = false; break; }
+      let d=0, ok=true;
+      for (let i=0;i<s.length;i++){
+        const ch=s[i]; if(ch==='(') d++; else if(ch===')') d--;
+        if(d===0 && i<s.length-1){ ok=false; break; }
+        if(d<0){ ok=false; break; }
       }
-      if (ok) s = s.slice(1, -1).trim();
-      else break;
+      if(ok) s=s.slice(1,-1).trim(); else break;
     }
     return s;
   }
 
-  /* ---------- عزل y جبريًا (نسخة أقوى) ---------- */
- function tryLinearSolveForY(lhsRaw, rhsRaw){
-  // طَبِّع وأزل الأقواس الخارجية
-  let L0 = stripOuterParens(preprocessBasic(lhsRaw));
-  let R0 = stripOuterParens(preprocessBasic(rhsRaw));
+  function tryLinearSolveForY(lhsRaw, rhsRaw){
+    let L0 = stripOuterParens(preprocessBasic(lhsRaw));
+    let R0 = stripOuterParens(preprocessBasic(rhsRaw));
 
-  function solve(side, other){
-    side  = stripOuterParens(String(side || '').trim());
-    other = stripOuterParens(String(other || '').trim());
-    if (containsY(other)) return null; // الطرف المقابل لا يجب أن يحتوي y
+    function solve(side, other){
+      side  = stripOuterParens(String(side || '').trim());
+      other = stripOuterParens(String(other || '').trim());
+      if (containsY(other)) return null;
 
-    const noY = s => !containsY(s);
-    let m;
+      const noY = s => !containsY(s);
+      let m;
 
-    // 1) (a)*y ± b  أو  a*y ± b
-    m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y\s*([+\-])\s*(.+)\s*$/i);
-    if (m) {
-      const a = (m[1] ?? m[2] ?? '').trim(), op = m[3], b = m[4].trim();
-      if (noY(a) && noY(b)) {
-        const numer = op === '+' ? `(${other})-(${b})` : `(${other})+(${b})`;
-        return `(${numer})/(${a})`;
+      // a*y ± b
+      m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y\s*([+\-])\s*(.+)\s*$/i);
+      if (m) {
+        const a=(m[1]??m[2]??'').trim(), op=m[3], b=m[4].trim();
+        if (noY(a)&&noY(b)) {
+          const numer = op==='+' ? `(${other})-(${b})` : `(${other})+(${b})`;
+          return `(${numer})/(${a})`;
+        }
       }
+
+      // y ± b
+      m = side.match(/^\(?\s*y\s*\)?\s*([+\-])\s*(.+)\s*$/i);
+      if (m) { const op=m[1], b=m[2].trim(); if(noY(b)) return op==='+'?`(${other})-(${b})`:`(${other})+(${b})`; }
+
+      // a*y
+      m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y\s*$/i);
+      if (m) { const a=(m[1]??m[2]??'').trim(); if(noY(a)) return `(${other})/(${a})`; }
+
+      // y
+      if (/^\(?\s*y\s*\)?$/i.test(side)) return `${other}`;
+
+      // other ± y
+      m = side.match(/^(.+?)\s*([+\-])\s*\(?\s*y\s*\)?\s*$/i);
+      if (m) { const o=stripOuterParens(m[1].trim()), op=m[2]; if(noY(o)) return op==='+'?`(${other})-(${o})`:`(${o})-(${other})`; }
+
+      // other ± (a*y)
+      m = side.match(/^(.+?)\s*([+\-])\s*\(?(?:\((.+?)\)|(.+?))\s*\*?\s*y\)?\s*$/i);
+      if (m) { const o=stripOuterParens(m[1].trim()), op=m[2], a=stripOuterParens((m[3]??m[4]??'').trim()); if(noY(o)&&noY(a)) return op==='+'?`((${other})-(${o}))/(${a})`:`((${o})-(${other}))/(${a})`; }
+
+      return null;
     }
 
-    // 2) y ± b
-    m = side.match(/^\(?\s*y\s*\)?\s*([+\-])\s*(.+)\s*$/i);
-    if (m) {
-      const op = m[1], b = m[2].trim();
-      if (noY(b)) return op === '+' ? `(${other})-(${b})` : `(${other})+(${b})`;
-    }
-
-    // 3) (a)*y  أو  a*y
-    m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y\s*$/i);
-    if (m) {
-      const a = (m[1] ?? m[2] ?? '').trim();
-      if (noY(a)) return `(${other})/(${a})`;
-    }
-
-    // 4) y فقط
-    if (/^\(?\s*y\s*\)?$/i.test(side)) return `${other}`;
-
-    // 5) other ± y  ← ✅ صارت متسامحة للمسافات/الأقواس/RTL
-    m = side.match(/^(.+?)\s*([+\-])\s*\(?\s*y\s*\)?\s*$/i);
-    if (m) {
-      const otherOnSide = stripOuterParens(m[1].trim()), op = m[2];
-      if (noY(otherOnSide))
-        return op === '+' ? `(${other})-(${otherOnSide})` : `(${otherOnSide})-(${other})`;
-    }
-
-    // 6) other ± (a*y)  ← ✅ أيضًا متسامحة
-    m = side.match(/^(.+?)\s*([+\-])\s*\(?(?:\((.+?)\)|(.+?))\s*\*?\s*y\)?\s*$/i);
-    if (m) {
-      const otherOnSide = stripOuterParens(m[1].trim()), op = m[2];
-      const a = stripOuterParens((m[3] ?? m[4] ?? '').trim());
-      if (noY(otherOnSide) && noY(a)) {
-        return op === '+'
-          ? `((${other})-(${otherOnSide}))/(${a})`
-          : `((${otherOnSide})-(${other}))/(${a})`;
-      }
-    }
-
+    let js = solve(R0, L0); if (js) return js;
+    js = solve(L0, R0);     if (js) return js;
     return null;
   }
 
-  // جرّب عندما تكون y في الطرف الأيمن ثم الأيسر
-  let js = solve(R0, L0); if (js) return js;
-  js = solve(L0, R0);     if (js) return js;
-  return null;
-}
-  /* ---------- مجال {} ---------- */
   function extractDomain(raw){
     const m = raw.match(/\{([^}]*)\}/);
     if(!m) return {text: raw, domain: null};
@@ -353,50 +330,42 @@
     return {text: cleaned, domain: dom};
   }
 
-  /* ---------- تحديد النوع ---------- */
   function normalizeExpr(raw){
     if(!raw) return {kind:'none'};
     const {text, domain} = extractDomain(raw);
-    let s = String(text).trim();
+    const s = String(text).trim();
     const hasEq = s.includes('=');
 
     if (hasEq) {
       const [lhsRaw, rhsRaw] = s.split('=');
       const lhs = preprocessBasic(lhsRaw), rhs = preprocessBasic(rhsRaw);
 
-      // بارامترية
       if (/x\(t\)\s*=/.test(lhs+rhs) && /y\(t\)\s*=/.test(lhs+rhs)) {
         const pair = preprocessBasic(s);
         const mx = pair.match(/x\(t\)\s*=\s*([^,;]+)[,;]/i);
         const my = pair.match(/y\(t\)\s*=\s*([^,;]+)/i);
         if (mx && my) return { kind:'param', xt: mx[1].trim(), yt: my[1].trim(), domain };
       }
-      // قطبية
       if (/r\((theta|ϴ|θ)\)\s*=/.test(lhs+rhs)) {
         const all = preprocessBasic(s);
         const mr = all.match(/r\((?:theta|ϴ|θ)\)\s*=\s*(.+)/i);
         if (mr) return { kind:'polar', rth: mr[1].trim(), domain };
       }
-      // y منفردة
       if (sideIsY(lhs)) return { kind:'explicit', js: preprocessBasic(rhsRaw), domain };
       if (sideIsY(rhs)) return { kind:'explicit', js: preprocessBasic(lhsRaw), domain };
 
-      // محاولة عزل خطي
       const solved = tryLinearSolveForY(lhsRaw, rhsRaw);
       if (solved) return { kind:'explicit', js: preprocessBasic(solved), domain };
 
-      // ضمني
       return { kind:'implicit', eq: preprocessBasic(s), domain };
     }
-    // بدون مساواة: y = expr(x)
     return { kind:'explicit', js: preprocessBasic(s), domain };
   }
 
-  /* ---------- تقييم ---------- */
-  const isSafe = (expr) => {
-  // بعد preprocessBasic المفروض ما يبقى إلا هذي المجموعة
-  return /^[0-9+\-*/()., xytahinselcogqrtpIEnA-Z_]*$/i.test(expr);
-};
+  /* ---------- تقييم آمن ---------- */
+  const isBlocked = /(constructor|prototype|window|document|Function|eval|globalThis)/i;
+  const isSafe = expr => /^[0-9+\-*/().,\sA-Za-z_]+$/.test(expr) && !isBlocked.test(expr);
+
   function buildScope(vars){
     const scope = Object.create(Math);
     scope.log10 = (v)=>Math.log10(v);
@@ -405,18 +374,45 @@
     if(vars) for(const k of Object.keys(vars)) scope[k] = vars[k];
     return scope;
   }
-  function makeFn1(js){ if(!js||!isSafe(js)) throw new Error('تعبير غير صالح'); return Function('x', `with(this){return (${js});}`).bind(buildScope()); }
-  function makeFn2(js){ if(!js||!isSafe(js)) throw new Error('تعبير غير صالح'); return Function('x','y', `with(this){return (${js});}`).bind(buildScope()); }
-  function evalInScope(expr, extra){ const s=preprocessBasic(expr); return Function(`with(this){return (${s});}`).bind(buildScope(extra))(); }
+  function makeFn1(js){
+    const code = preprocessBasic(js);
+    if(!code || !isSafe(code)) throw new Error('تعبير غير صالح');
+    return Function('x', `with(this){return (${code});}`).bind(buildScope());
+  }
+  function makeFn2(js){
+    const code = preprocessBasic(js);
+    if(!code || !isSafe(code)) throw new Error('تعبير غير صالح');
+    return Function('x','y', `with(this){return (${code});}`).bind(buildScope());
+  }
+  function evalInScope(expr, extra){
+    const code = preprocessBasic(expr);
+    return Function(`with(this){return (${code});}`).bind(buildScope(extra))();
+  }
 
   /* ---------- تحويل إحداثيات ---------- */
-  function worldToScreen(x,y){ const r=devicePixelRatio||1,w=canvas.width,h=canvas.height; return { x:(w/2)+(x-state.centerX)*state.scale*r, y:(h/2)-(y-state.centerY)*state.scale*r }; }
-  function screenToWorld(sx,sy){ const r=devicePixelRatio||1,w=canvas.width,h=canvas.height; return { x:(sx-w/2)/(state.scale*r)+state.centerX, y:-(sy-h/2)/(state.scale*r)+state.centerY }; }
-  function resizeCanvas(){ const r=devicePixelRatio||1,rect=canvas.getBoundingClientRect(); canvas.width=Math.max(1,Math.floor(rect.width*r)); canvas.height=Math.max(1,Math.floor(rect.height*r)); draw(); }
+  function worldToScreen(x,y){
+    const r=devicePixelRatio||1,w=canvas.width,h=canvas.height;
+    return { x:(w/2)+(x-state.centerX)*state.scale*r, y:(h/2)-(y-state.centerY)*state.scale*r };
+  }
+  function screenToWorld(sx,sy){
+    const r=devicePixelRatio||1,w=canvas.width,h=canvas.height;
+    return { x:(sx-w/2)/(state.scale*r)+state.centerX, y:-(sy-h/2)/(state.scale*r)+state.centerY };
+  }
+  function resizeCanvas(){
+    const r=devicePixelRatio||1,rect=canvas.getBoundingClientRect();
+    canvas.width=Math.max(1,Math.floor(rect.width*r));
+    canvas.height=Math.max(1,Math.floor(rect.height*r));
+    draw();
+  }
   new ResizeObserver(resizeCanvas).observe(document.querySelector('.canvas-wrap'));
 
-  /* ---------- شبكة ومحاور (تم إصلاح حدود المشهد) ---------- */
-  function niceStep(ppu){ const target=110, units=target/ppu, p=Math.pow(10, Math.floor(Math.log10(units))); const c=[1,2,5,10].map(v=>v*p); let best=c[0]; for(const v of c) if(Math.abs(v-units)<Math.abs(best-units)) best=v; return best; }
+  /* ---------- شبكة ومحاور ---------- */
+  function niceStep(ppu){
+    const target=110, units=target/ppu, p=Math.pow(10, Math.floor(Math.log10(units)));
+    const c=[1,2,5,10].map(v=>v*p); let best=c[0];
+    for(const v of c) if(Math.abs(v-units)<Math.abs(best-units)) best=v;
+    return best;
+  }
   function drawGrid(){
     const r=devicePixelRatio||1, w=canvas.width, h=canvas.height;
 
@@ -454,7 +450,7 @@
     ctx.textAlign='right'; ctx.textBaseline='top';    ctx.fillText('س', Math.min(w-6,w-6), sy0 + 6);
     ctx.textAlign='left';  ctx.textBaseline='bottom'; ctx.fillText('ص', sx0 + 6, Math.max(12,12));
 
-    // أرقام س (تحت المحور)
+    // أرقام س
     ctx.fillStyle=cssVar('--muted'); ctx.textAlign='right'; ctx.textBaseline='top';
     for(let x=Math.floor(tl.x/step)*step; x<=br.x; x+=step){
       if(Math.abs(x)<1e-12) continue;
@@ -471,21 +467,28 @@
   /* ---------- أخذ عينات تكيفي ---------- */
   function adaptiveSampleX(f,left,right){
     const pts=[], maxDepth=12, eps=1e-2, N0=25;
-    function rec(a,b,ya,yb,d){ const m=(a+b)/2; let ym=f(m); if(!isFinite(ya)) ya=f(a); if(!isFinite(yb)) yb=f(b);
+    function rec(a,b,ya,yb,d){
+      const m=(a+b)/2; let ym=f(m);
+      if(!isFinite(ya)) ya=f(a); if(!isFinite(yb)) yb=f(b);
       if(!isFinite(ym)||d>=maxDepth){ pts.push([a,ya],[b,yb]); return; }
       const ylin=(ya+yb)/2; if(Math.abs(ym-ylin)<eps*(1+Math.abs(ym))){ pts.push([a,ya],[b,yb]); return; }
       rec(a,m,ya,ym,d+1); rec(m,b,ym,yb,d+1);
     }
     let yL=f(left), yR=f(right);
-    if(!isFinite(yL)||!isFinite(yR)){ const dx=(right-left)/N0; let x=left, lx=null, ly=null; for(let i=0;i<=N0;i++,x+=dx){ const y=f(x); if(isFinite(y)){ if(lx!==null){ rec(lx,x,ly,y,0); } lx=x; ly=y; } } }
-    else rec(left,right,yL,yR,0);
-    pts.sort((a,b)=>a[0]-b[0]); const out=[]; let prev=null; for(const p of pts){ if(!prev || p[0]!==prev[0]) out.push(p); prev=p; } return out;
+    if(!isFinite(yL)||!isFinite(yR)){
+      const dx=(right-left)/N0; let x=left, lx=null, ly=null;
+      for(let i=0;i<=N0;i++,x+=dx){ const y=f(x); if(isFinite(y)){ if(lx!==null){ rec(lx,x,ly,y,0); } lx=x; ly=y; } }
+    } else rec(left,right,yL,yR,0);
+    pts.sort((a,b)=>a[0]-b[0]);
+    const out=[]; let prev=null; for(const p of pts){ if(!prev || p[0]!==prev[0]) out.push(p); prev=p; }
+    return out;
   }
 
   /* ---------- رسم المنحنيات ---------- */
   function drawPolylines(){
     state.polylines.length=0;
-    const r=devicePixelRatio||1, w=canvas.width, viewL=screenToWorld(0,0).x, viewR=screenToWorld(w,0).x;
+    const r=devicePixelRatio||1, w=canvas.width;
+    const viewL=screenToWorld(0,0).x, viewR=screenToWorld(w,0).x;
 
     for(const [i,ex] of state.expressions.entries()){
       if(!ex.visible) continue;
@@ -511,11 +514,10 @@
           ctx.stroke();
         }
         else if(spec.kind==='implicit'){
-          // ====== محاولة عزل عددي y(x) لو ضمني خطي في y ======
           const F = (()=>{ const eq = spec.eq.replace('=','-(')+')'; return makeFn2(eq); })();
           function yFromLinear(x){
             const b = F(x, 0);
-            const a = F(x, 1) - b;      // تقريب لمعامل y
+            const a = F(x, 1) - b;
             if (!isFinite(a) || Math.abs(a) < 1e-9) return NaN;
             const y = -b / a;
             const res = Math.abs(F(x, y));
@@ -534,7 +536,7 @@
             }
             ctx.stroke();
           } else {
-            // ====== رجوع للترسيم الضمني (Marching Squares) ======
+            // Marching Squares
             const tl=screenToWorld(0,0), br=screenToWorld(canvas.width, canvas.height);
             const nx=60, ny=40; const dx=(br.x-tl.x)/nx, dy=(tl.y-br.y)/ny;
             function val(x,y){ const v=F(x,y); return isFinite(v)?v:NaN; }
@@ -575,8 +577,12 @@
           for(let i=0;i<=steps;i++){ const th=th0+i*d; const r0=fr(th); const x=r0*Math.cos(th), y=r0*Math.sin(th); const p=worldToScreen(x,y); if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); poly.push([x,y]); }
           ctx.stroke();
         }
-      } catch(err){ markExprError(ex.id, err.message); continue; }
-      clearExprError(ex.id); state.polylines.push({id:ex.id,color:ctx.strokeStyle,points:poly});
+      } catch(err){
+        markExprError(ex.id, err.message);
+        continue;
+      }
+      clearExprError(ex.id);
+      state.polylines.push({id:ex.id,color:ctx.strokeStyle,points:poly});
     }
   }
 
@@ -587,7 +593,7 @@
     if((d===0&&e===0&&f===0&&g===0)) return null;
     if((d>0)!=(e>0) && (f>0)!=(g>0)){
       const A=q[0]-p[0], B=r[0]-s[0], C=q[1]-p[1], D=r[1]-s[1], E=r[0]-p[0], F=r[1]-p[1];
-      const det=A*D-B*C; if(Math.abs(det)<1e-12) return null; const t=(E*D-B*F)/det; return [p[0]+t*A, p[1]+t*C];
+      const det=A*D-B*C; if(Math.abs(det)<1e-12) return null; const t=(E*D-B*F)/det; return [p[0]+t*A, p[1]+t+C];
     }
     return null;
   }
@@ -605,7 +611,8 @@
         }
       }
     }
-    ctx.fillStyle='#fef08a'; for(const d of dots){ ctx.beginPath(); ctx.arc(d[0],d[1], 4*(devicePixelRatio||1), 0, Math.PI*2); ctx.fill(); }
+    ctx.fillStyle='#fef08a';
+    for(const d of dots){ ctx.beginPath(); ctx.arc(d[0],d[1], 4*(devicePixelRatio||1), 0, Math.PI*2); ctx.fill(); }
   }
 
   /* ---------- مماس (Alt+Click) ---------- */
@@ -626,7 +633,7 @@
   /* ---------- حلقة الرسم ---------- */
   function draw(){ drawGrid(); drawPolylines(); drawIntersections(); updateStatus(); }
 
-  /* ---------- واجهة الدوال (لون + منزلق سمك + إدخال عربي) ---------- */
+  /* ---------- واجهة الدوال ---------- */
   function renderExprList(){
     exprListEl.innerHTML='';
     state.expressions.forEach((ex,idx)=>{
@@ -634,45 +641,34 @@
       card.className='card expr-card';
       card.dataset.id=ex.id;
 
-      // 🎨 اللون
       const col=document.createElement('input');
       col.type='color'; col.className='colorpick expr-color';
       col.value=ex.color||COLORS[idx%COLORS.length];
       col.addEventListener('input',()=>{ ex.color=col.value; draw(); persistDeb(); });
       card.appendChild(col);
 
-      // 📝 الحقل
       const inp=document.createElement('input');
       inp.className='input expr expr-input';
       inp.placeholder='مثال: ص = س^2 | س + ص = ٤ | ٢س + ص = ٥ | س*ص = ١';
       inp.value=ex.text||'';
-      // عرض الأرقام التي تُكتب بالعربية تلقائيًا
-      inp.addEventListener('input', () => {
+      inp.addEventListener('input', ()=>{
         const start=inp.selectionStart, end=inp.selectionEnd;
         const before=inp.value, after=toArabicDigits(before);
         if (before!==after) { inp.value=after; inp.setSelectionRange(start, end); }
-        ex.text = inp.value;
-        draw(); persistDeb();
+        ex.text = inp.value; draw(); persistDeb();
       });
       card.appendChild(inp);
 
-      // 🔧 الأدوات (صفّ ثانٍ)
-      const tools=document.createElement('div');
-      tools.className='expr-tools';
-
+      const tools=document.createElement('div'); tools.className='expr-tools';
       const lw=document.createElement('input');
-      lw.type='range'; lw.min='0.5'; lw.max='12'; lw.step='0.5';
-      lw.value=ex.width||2; lw.className='lw';
-      const lwVal=document.createElement('span');
-      lwVal.className='lw-label'; lwVal.textContent=toArabicDigits((ex.width||2).toString());
+      lw.type='range'; lw.min='0.5'; lw.max='12'; lw.step='0.5'; lw.value=ex.width||2; lw.className='lw';
+      const lwVal=document.createElement('span'); lwVal.className='lw-label'; lwVal.textContent=toArabicDigits((ex.width||2).toString());
       lw.addEventListener('input',()=>{ const v=Math.max(0.5, Math.min(12, parseFloat(lw.value)||2)); ex.width=v; lwVal.textContent=toArabicDigits(v.toString()); draw(); persistDeb(); });
 
-      const vis=document.createElement('input');
-      vis.type='checkbox'; vis.checked=ex.visible!==false; vis.title='إظهار/إخفاء';
+      const vis=document.createElement('input'); vis.type='checkbox'; vis.checked=ex.visible!==false; vis.title='إظهار/إخفاء';
       vis.addEventListener('change',()=>{ ex.visible=vis.checked; draw(); persistDeb(); });
 
-      const del=document.createElement('button');
-      del.className='icon-btn'; del.title='حذف'; del.textContent='🗑️';
+      const del=document.createElement('button'); del.className='icon-btn'; del.title='حذف'; del.textContent='🗑️';
       del.addEventListener('click',()=>{ state.expressions=state.expressions.filter(it=>it.id!==ex.id); renderExprList(); draw(); persistDeb(); });
 
       tools.appendChild(document.createTextNode('سمك'));
@@ -686,8 +682,8 @@
     });
   }
 
-  function markExprError(id,msg){ const card=exprListEl.querySelector(`[data-id="${id}"]`); if(card){ card.style.borderColor='#7f1d1d'; card.title=msg; } }
-  function clearExprError(id){ const card=exprListEl.querySelector(`[data-id="${id}"]`); if(card){ card.style.borderColor='var(--border)'; card.title=''; } }
+  const markExprError = (id,msg) => { const card=exprListEl.querySelector(`[data-id="${id}"]`); if(card){ card.style.borderColor='#7f1d1d'; card.title=msg; } };
+  const clearExprError = (id) => { const card=exprListEl.querySelector(`[data-id="${id}"]`); if(card){ card.style.borderColor='var(--border)'; card.title=''; } };
 
   /* ---------- المنزلقات ---------- */
   function renderSliders(){
@@ -725,7 +721,7 @@
     });
   }
 
-  /* ---------- تفاعل الماوس/اللمس ---------- */
+  /* ---------- تفاعل ---------- */
   canvas.addEventListener('mousemove', (e)=>{ const rect=canvas.getBoundingClientRect(), r=devicePixelRatio||1; const sx=(e.clientX-rect.left)*r, sy=(e.clientY-rect.top)*r; const w=screenToWorld(sx,sy);
     state.mouse={x:sx,y:sy,wx:w.x,wy:w.y};
     if(state.dragging){ const dx=(sx-state.dragStart.x)/(state.scale*r), dy=(sy-state.dragStart.y)/(state.scale*r); state.centerX=state.dragStart.cx-dx; state.centerY=state.dragStart.cy+dy; draw(); } else updateStatus();
@@ -736,7 +732,6 @@
   canvas.addEventListener('dblclick', ()=>{ resetView(); draw(); persistDeb(); });
   canvas.addEventListener('click', (e)=>{ if(e.altKey){ const w=screenToWorld(state.mouse.x, state.mouse.y); draw(); drawTangentAt(w.x,w.y); } });
 
-  // لمس
   canvas.addEventListener('touchstart', (e)=>{
     if(e.touches.length===1){
       const t=e.touches[0], rect=canvas.getBoundingClientRect(), r=devicePixelRatio||1;
@@ -776,7 +771,7 @@
   /* ---------- حالة/مشاركة ---------- */
   function updateStatus(){ statusEl.textContent = `س = ${toArabicDigits(state.mouse.wx.toFixed(3))}, ص = ${toArabicDigits(state.mouse.wy.toFixed(3))} | مقياس: 1u ≈ ${Math.round(state.scale)}px`; }
   function flash(msg){ const old=statusEl.textContent; statusEl.textContent=msg; setTimeout(()=>statusEl.textContent=old, 1200); }
-  function serialize(){ return { v:8, cx:state.centerX, cy:state.centerY, sc:state.scale, theme:state.theme, expr: state.expressions.map(e=>({t:e.text,c:e.color,w:e.width,v:!!e.visible})), sliders: state.sliders }; }
+  function serialize(){ return { v:10, cx:state.centerX, cy:state.centerY, sc:state.scale, theme:state.theme, expr: state.expressions.map(e=>({t:e.text,c:e.color,w:e.width,v:!!e.visible})), sliders: state.sliders }; }
   function deserialize(o){
     if(!o) return;
     if(typeof o.cx==='number') state.centerX=o.cx;
