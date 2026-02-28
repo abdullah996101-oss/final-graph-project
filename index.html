@@ -51,7 +51,8 @@
     .icon-btn{background:transparent; border:0; color:var(--muted); cursor:pointer; font-size:16px}
     .icon-btn:hover{color:var(--danger)}
     .colorpick{appearance:none; -webkit-appearance:none; background:transparent; border:0; width:24px; height:24px; padding:0; cursor:pointer}
-    .width-input{width:60px; text-align:center}
+    .lw{width:110px}
+    .lw-label{font-size:12px; color:var(--muted); min-width:36px; text-align:center}
 
     .canvas-wrap{position:relative; background:radial-gradient(1200px 600px at 100% 0%, rgba(34,211,238,.04), transparent 60%)}
     canvas{display:block; width:100%; height:100%; background:transparent}
@@ -244,7 +245,7 @@
     return null;
   }
 
-  /* ---------- قراءة المجال { ... } ---------- */
+  /* ---------- مجال {} ---------- */
   function extractDomain(raw){
     const m = raw.match(/\{([^}]*)\}/);
     if(!m) return {text: raw, domain: null};
@@ -262,7 +263,7 @@
     return {text: cleaned, domain: dom};
   }
 
-  /* ---------- تحديد نوع الإدخال ---------- */
+  /* ---------- تحديد النوع ---------- */
   function normalizeExpr(raw){
     if(!raw) return {kind:'none'};
     const {text, domain} = extractDomain(raw);
@@ -295,9 +296,8 @@
     return { kind:'explicit', js: preprocessBasic(s), domain };
   }
 
-  /* ---------- التقييم داخل نطاق Math + المنزلقات ---------- */
+  /* ---------- تقييم داخل نطاق Math + المنزلقات ---------- */
   const isSafe = expr => /^[0-9+\-*/().,\sxa-zA-Z_]*\**[0-9+\-*/().,\sxa-zA-Z_]*$/.test(expr);
-
   function buildScope(vars){
     const scope = Object.create(Math);
     scope.log10 = (v)=>Math.log10(v);
@@ -325,29 +325,46 @@
 
     const step = niceStep(state.scale), sub = step/5, tl=screenToWorld(0,0), br=screenToWorld(w,h);
 
+    // فرعية
     ctx.lineWidth=1; ctx.strokeStyle=cssVar('--grid-sub'); ctx.beginPath();
     for(let x=Math.floor(tl.x/sub)*sub;x<=br.x;x+=sub){ const sx=worldToScreen(x,0).x; ctx.moveTo(sx+.5,0); ctx.lineTo(sx+.5,h); }
     for(let y=Math.floor(br.y/sub)*sub;y<=tl.y;y+=sub){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
     ctx.stroke();
 
+    // رئيسية
     ctx.strokeStyle=cssVar('--grid'); ctx.beginPath();
     for(let x=Math.floor(tl.x/step)*step;x<=br.x;x+=step){ const sx=worldToScreen(x,0).x; ctx.moveTo(sx+.5,0); ctx.lineTo(sx+.5,h); }
     for(let y=Math.floor(br.y/step)*step;y<=tl.y;y+=step){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
     ctx.stroke();
 
+    // محاور
     ctx.strokeStyle=cssVar('--axis'); ctx.lineWidth=1.5; ctx.beginPath();
     const sx0=worldToScreen(0,0).x, sy0=worldToScreen(0,0).y; ctx.moveTo(sx0+.5,0); ctx.lineTo(sx0+.5,h); ctx.moveTo(0,sy0+.5); ctx.lineTo(w,sy0+.5); ctx.stroke();
 
+    // تسميات المحاور
     ctx.fillStyle = cssVar('--axis');
     ctx.font = `${12*r}px system-ui, -apple-system, Segoe UI, Noto Sans Arabic, Arial`;
-    ctx.textAlign='right'; ctx.textBaseline='top'; ctx.fillText('س', Math.min(w-6,w-6), sy0+6);
-    ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('ص', sx0+6, Math.max(12,12));
+    ctx.textAlign='right'; ctx.textBaseline='top'; ctx.fillText('س', Math.min(w-6,w-6), sy0 + 6);
+    ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('ص', sx0 + 6, Math.max(12,12));
 
+    // أرقام التدريج
     ctx.fillStyle=cssVar('--muted');
+
+    // (أرقام محور س) تبقى تحت المحور
     ctx.textAlign='right'; ctx.textBaseline='top';
-    for(let x=Math.floor(tl.x/step)*step;x<=br.x;x+=step){ if(Math.abs(x)<1e-12) continue; const p=worldToScreen(x,0); ctx.fillText(toArabicDigits(x.toFixed(2).replace(/\.00$/,'')), p.x-4, sy0+6); }
-    ctx.textAlign='left'; ctx.textBaseline='bottom';
-    for(let y=Math.floor(br.y/step)*step;y<=tl.y;y+=step){ if(Math.abs(y)<1e-12) continue; const p=worldToScreen(0,y); ctx.fillText(toArabicDigits(y.toFixed(2).replace(/\.00$/,'')), sx0+6, p.y-2); }
+    for(let x=Math.floor(tl.x/step)*step;x<=br.x;x+=step){
+      if(Math.abs(x)<1e-12) continue;
+      const p=worldToScreen(x,0);
+      ctx.fillText(toArabicDigits(x.toFixed(2).replace(/\.00$/,'')), p.x-4, sy0+6);
+    }
+
+    // (أرقام محور ص) **إلى يسار** المحور ص
+    ctx.textAlign='right'; ctx.textBaseline='bottom';
+    for(let y=Math.floor(br.y/step)*step;y<=tl.y;y+=step){
+      if(Math.abs(y)<1e-12) continue;
+      const p=worldToScreen(0,y);
+      ctx.fillText(toArabicDigits(y.toFixed(2).replace(/\.00$/,'')), sx0 - 6, p.y - 2);
+    }
   }
 
   /* ---------- رسم المنحنيات ---------- */
@@ -474,7 +491,7 @@
 
   function draw(){ drawGrid(); drawPolylines(); drawIntersections(); updateStatus(); }
 
-  /* ---------- واجهة الدوال (مع اللون والسمك) ---------- */
+  /* ---------- واجهة الدوال (لون + منزلق سمك + إدخال عربي للأرقام) ---------- */
   function renderExprList(){
     exprListEl.innerHTML='';
     state.expressions.forEach((ex,idx)=>{
@@ -485,18 +502,31 @@
       col.addEventListener('input',()=>{ ex.color=col.value; draw(); persistDeb(); });
       card.appendChild(col);
 
-      // حقل المعادلة
+      // حقل المعادلة (تحويل أرقام المدخل إلى عربية مباشرة)
       const inp=document.createElement('input'); inp.className='input';
       inp.placeholder='مثال: ص = س^2 | س + ص = 4 | 2س + ص = 5 | س*ص = 1';
-      inp.value=ex.text||''; inp.addEventListener('input', e=>{ ex.text=e.target.value; draw(); persistDeb(); });
+      inp.value=ex.text||'';
+      // عند الكتابة: حوِّل أي أرقام لاتينية إلى عربية **في العرض**
+      inp.addEventListener('input', () => {
+        const caretStart = inp.selectionStart, caretEnd = inp.selectionEnd;
+        const before = inp.value;
+        const converted = toArabicDigits(before);
+        if (before !== converted) {
+          inp.value = converted;
+          // نفس الطول → لا نغيّر المؤشر
+          inp.setSelectionRange(caretStart, caretEnd);
+        }
+        ex.text = inp.value; // نخزّن النص بصيغته العربية، والمفسّر سيحوّله داخليًا إلى إنجليزي للتقييم
+        draw(); persistDeb();
+      });
       card.appendChild(inp);
 
-      // أدوات (إظهار/سمك/حذف)
+      // أدوات: منزلق سمك + عرض قيمته بالعربية + إظهار/إخفاء + حذف
       const tools=document.createElement('div'); tools.className='mini';
 
-      const wLab=document.createElement('span'); wLab.className='muted'; wLab.textContent='سمك';
-      const w=document.createElement('input'); w.type='number'; w.min='0.5'; w.max='12'; w.step='0.5'; w.value=ex.width||2; w.className='width-input';
-      w.addEventListener('change',()=>{ const v=Math.max(0.5, Math.min(12, parseFloat(w.value)||2)); ex.width=v; w.value=v; draw(); persistDeb(); });
+      const lw=document.createElement('input'); lw.type='range'; lw.min='0.5'; lw.max='12'; lw.step='0.5'; lw.value=ex.width||2; lw.className='lw';
+      const lwVal=document.createElement('span'); lwVal.className='lw-label'; lwVal.textContent=toArabicDigits((ex.width||2).toString());
+      lw.addEventListener('input',()=>{ const v=Math.max(0.5, Math.min(12, parseFloat(lw.value)||2)); ex.width=v; lwVal.textContent=toArabicDigits(v.toString()); draw(); persistDeb(); });
 
       const vis=document.createElement('input'); vis.type='checkbox'; vis.checked=ex.visible!==false; vis.title='إظهار/إخفاء';
       vis.addEventListener('change',()=>{ ex.visible=vis.checked; draw(); persistDeb(); });
@@ -504,8 +534,9 @@
       const del=document.createElement('button'); del.className='icon-btn'; del.title='حذف'; del.textContent='🗑️';
       del.addEventListener('click',()=>{ state.expressions=state.expressions.filter(it=>it.id!==ex.id); renderExprList(); draw(); persistDeb(); });
 
-      tools.appendChild(wLab); tools.appendChild(w);
-      tools.appendChild(vis);  tools.appendChild(del);
+      tools.appendChild(document.createTextNode('سمك'));
+      tools.appendChild(lw); tools.appendChild(lwVal);
+      tools.appendChild(vis); tools.appendChild(del);
       card.appendChild(tools);
 
       exprListEl.appendChild(card);
@@ -525,22 +556,20 @@
       const name=document.createElement('input'); name.className='input'; name.style.width='120px'; name.value=sl.name; name.title='اسم المتغيّر';
       name.addEventListener('change',()=>{ sl.name=name.value.trim(); draw(); persistDeb(); });
 
-      const range=document.createElement('input'); range.type='range'; range.min=sl.min; range.max=sl.max; range.step=sl.step; range.value=sl.value;
-      range.style.flex='1'; range.addEventListener('input',()=>{ sl.value=parseFloat(range.value); val.value=sl.value; draw(); persistDeb(); });
-
-      const val=document.createElement('input'); val.className='input'; val.value=sl.value; val.style.width='80px'; val.style.textAlign='center';
-      val.addEventListener('change',()=>{ let v=parseFloat(val.value); if(isNaN(v)) v=sl.value; sl.value=v; range.value=v; draw(); persistDeb(); });
+      const range=document.createElement('input'); range.type='range'; range.min=sl.min; range.max=sl.max; range.step=sl.step; range.value=sl.value; range.style.flex='1';
+      const val=document.createElement('span'); val.className='lw-label'; val.textContent=toArabicDigits(String(sl.value));
+      range.addEventListener('input',()=>{ sl.value=parseFloat(range.value); val.textContent=toArabicDigits(String(sl.value)); draw(); persistDeb(); });
 
       const del=document.createElement('button'); del.className='btn danger'; del.textContent='حذف';
       del.onclick=()=>{ state.sliders.splice(idx,1); renderSliders(); draw(); persistDeb(); };
 
       row.appendChild(name); row.appendChild(range); row.appendChild(val); row.appendChild(del);
       const row2=document.createElement('div'); row2.className='mini'; row2.style.gap='6px';
-      const lmin=document.createElement('input'); lmin.className='input'; lmin.value=sl.min; lmin.style.width='80px';
+      const lmin=document.createElement('input'); lmin.className='input'; lmin.style.width='80px'; lmin.value=sl.min;
+      const lstep=document.createElement('input'); lstep.className='input'; lstep.style.width='80px'; lstep.value=sl.step;
+      const lmax=document.createElement('input'); lmax.className='input'; lmax.style.width='80px'; lmax.value=sl.max;
       lmin.addEventListener('change',()=>{ sl.min=parseFloat(lmin.value)||sl.min; range.min=sl.min; });
-      const lstep=document.createElement('input'); lstep.className='input'; lstep.value=sl.step; lstep.style.width='80px';
       lstep.addEventListener('change',()=>{ sl.step=parseFloat(lstep.value)||sl.step; range.step=sl.step; });
-      const lmax=document.createElement('input'); lmax.className='input'; lmax.value=sl.max; lmax.style.width='80px';
       lmax.addEventListener('change',()=>{ sl.max=parseFloat(lmax.value)||sl.max; range.max=sl.max; });
 
       const hint=document.createElement('div'); hint.className='muted'; hint.textContent='المدى: [الحد الأدنى، الخطوة، الحد الأقصى]'; hint.style.marginTop='6px';
@@ -552,7 +581,7 @@
     });
   }
 
-  /* ---------- تفاعل الماوس ---------- */
+  /* ---------- تفاعل الماوس/الجوال ---------- */
   canvas.addEventListener('mousemove', (e)=>{ const rect=canvas.getBoundingClientRect(), r=devicePixelRatio||1; const sx=(e.clientX-rect.left)*r, sy=(e.clientY-rect.top)*r; const w=screenToWorld(sx,sy);
     state.mouse={x:sx,y:sy,wx:w.x,wy:w.y};
     if(state.dragging){ const dx=(sx-state.dragStart.x)/(state.scale*r), dy=(sy-state.dragStart.y)/(state.scale*r); state.centerX=state.dragStart.cx-dx; state.centerY=state.dragStart.cy+dy; draw(); } else updateStatus();
@@ -563,7 +592,7 @@
   canvas.addEventListener('dblclick', ()=>{ resetView(); draw(); persistDeb(); });
   canvas.addEventListener('click', (e)=>{ if(e.altKey){ const w=screenToWorld(state.mouse.x, state.mouse.y); draw(); drawTangentAt(w.x,w.y); } });
 
-  /* ---------- تفاعل اللمس للجوال ---------- */
+  // لمس الجوال (سحب بإصبع، قرص بإصبعين، نقرتان لإعادة الضبط)
   canvas.addEventListener('touchstart', (e)=>{
     if(e.touches.length===1){
       const t=e.touches[0], rect=canvas.getBoundingClientRect(), r=devicePixelRatio||1;
@@ -598,13 +627,12 @@
   document.getElementById('btnShare').onclick  = ()=>{ persist(); navigator.clipboard?.writeText(location.href).then(()=>flash('تم نسخ الرابط')).catch(()=>flash('انسخ الرابط من شريط العنوان')); };
   document.getElementById('btnSave').onclick   = ()=>{ const blob=new Blob([JSON.stringify(serialize(),null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='graph-settings.json'; a.click(); };
   document.getElementById('btnLoad').onclick   = ()=>{ document.getElementById('fileLoader').click(); };
-  document.getElementById('fileLoader').addEventListener('change', (e)=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ try{ const obj=JSON.parse(rd.result); deserialize(obj); renderExprList(); renderSliders(); draw(); persistDeb(); }catch(err){ alert('ملف غير صالح'); } }; rd.readAsText(f); });
   document.getElementById('btnTheme').onclick  = ()=>{ const html=document.documentElement; const toLight=!html.classList.contains('light'); [document.documentElement, document.body].forEach(el=>el.classList.toggle('light', toLight)); state.theme=toLight?'light':'dark'; draw(); persistDeb(); };
 
   /* ---------- حالة/مشاركة ---------- */
   function updateStatus(){ statusEl.textContent = `س = ${toArabicDigits(state.mouse.wx.toFixed(3))}, ص = ${toArabicDigits(state.mouse.wy.toFixed(3))} | مقياس: 1u ≈ ${Math.round(state.scale)}px`; }
   function flash(msg){ const old=statusEl.textContent; statusEl.textContent=msg; setTimeout(()=>statusEl.textContent=old, 1200); }
-  function serialize(){ return { v:5, cx:state.centerX, cy:state.centerY, sc:state.scale, theme:state.theme, expr: state.expressions.map(e=>({t:e.text,c:e.color,w:e.width,v:!!e.visible})), sliders: state.sliders }; }
+  function serialize(){ return { v:6, cx:state.centerX, cy:state.centerY, sc:state.scale, theme:state.theme, expr: state.expressions.map(e=>({t:e.text,c:e.color,w:e.width,v:!!e.visible})), sliders: state.sliders }; }
   function deserialize(o){
     if(!o) return;
     if(typeof o.cx==='number') state.centerX=o.cx;
@@ -621,10 +649,7 @@
 
   function resetView(){ state.centerX=0; state.centerY=0; state.scale=60; }
   function showTooltip(sx,sy,msg){ tooltip.style.left=`${sx}px`; tooltip.style.top=`${sy}px`; tooltip.textContent=msg; tooltip.style.display='block'; setTimeout(()=>tooltip.style.display='none', 1800); }
-
-  function zoomAt(factor, sx, sy){
-    const before=screenToWorld(sx,sy); state.scale=Math.min(1200, Math.max(8, state.scale*factor)); const after=screenToWorld(sx,sy); state.centerX+=(before.x-after.x); state.centerY+=(before.y-after.y); draw();
-  }
+  function zoomAt(factor, sx, sy){ const before=screenToWorld(sx,sy); state.scale=Math.min(1200, Math.max(8, state.scale*factor)); const after=screenToWorld(sx,sy); state.centerX+=(before.x-after.x); state.centerY+=(before.y-after.y); draw(); }
 
   function init(){
     renderExprList(); renderSliders();
