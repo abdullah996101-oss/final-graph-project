@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -47,7 +48,7 @@
     .expr-list,.slider-list{display:grid; gap:10px}
     .card{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:10px; box-shadow:var(--shadow)}
 
-    /* ========== تخطيط بطاقة الدالة على صفَّين ========== */
+    /* ========== بطاقة الدالة صفَّين: لون+إدخال ثم الأدوات ========== */
     .expr-card{
       display:grid;
       grid-template-columns:28px 1fr;
@@ -99,7 +100,7 @@
       <div class="header">
         <div>
           <h1>آلة رسم بياني (س/ص) – موسّعة</h1>
-          <div class="muted">منزلقات، مجالات، ضمني/بارامتري/قطبي، تقاطعات، مماس، حفظ/استيراد، وضع فاتح/داكن</div>
+          <div class="muted">منزلقات، مجالات، ضمني/بارامترية/قطبية، تقاطعات، مماس، حفظ/استيراد، وضع فاتح/داكن</div>
         </div>
         <div class="mini">
           <button id="btnTheme" class="btn" title="الوضع الفاتح/الداكن">🌓 تبديل</button>
@@ -218,40 +219,88 @@
   const containsY = s => /\by\b/i.test(String(s));
   const sideIsY   = raw => /^y$/i.test(preprocessBasic(raw).trim());
 
-  /* ---------- عزل y (خطي) ---------- */
+  /* ---------- إزالة أقواس خارجية زائدة ---------- */
+  function stripOuterParens(s){
+    s = String(s).trim();
+    if (!s) return s;
+    while (s.startsWith('(') && s.endsWith(')')) {
+      let depth = 0, ok = true;
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === '(') depth++;
+        else if (ch === ')') depth--;
+        if (depth === 0 && i < s.length - 1) { ok = false; break; }
+        if (depth < 0) { ok = false; break; }
+      }
+      if (ok) s = s.slice(1, -1).trim();
+      else break;
+    }
+    return s;
+  }
+
+  /* ---------- عزل y جبريًا (نسخة أقوى) ---------- */
   function tryLinearSolveForY(lhsRaw, rhsRaw){
-    const L0 = preprocessBasic(lhsRaw), R0 = preprocessBasic(rhsRaw);
+    let L0 = stripOuterParens(preprocessBasic(lhsRaw));
+    let R0 = stripOuterParens(preprocessBasic(rhsRaw));
+
     function solve(side, other){
+      side  = stripOuterParens(side);
+      other = stripOuterParens(other);
       if (containsY(other)) return null;
+
+      const noY = s => !containsY(s);
       let m;
-      m = side.match(/^(.+?)\*?y\s*([+\-])\s*(.+)$/i);
-      if (m && !containsY(m[1]) && !containsY(m[3])) {
-        const a=m[1].trim(), op=m[2], b=m[3].trim();
-        const numer=(op==='+')?`(${other})-(${b})`:`(${other})+(${b})`;
-        return `(${numer})/(${a})`;
+
+      // (a)*y ± b  أو  a*y ± b
+      m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y\s*([+\-])\s*(.+)$/i);
+      if (m) {
+        const a = (m[1] ?? m[2] ?? '').trim(), op = m[3], b = m[4].trim();
+        if (noY(a) && noY(b)) {
+          const numer = op === '+' ? `(${other})-(${b})` : `(${other})+(${b})`;
+          return `(${numer})/(${a})`;
+        }
       }
+
+      // y ± b
       m = side.match(/^y\s*([+\-])\s*(.+)$/i);
-      if (m && !containsY(m[2])) {
-        const op=m[1], b=m[2].trim();
-        return (op==='+')?`(${other})-(${b})`:`(${other})+(${b})`;
+      if (m) {
+        const op = m[1], b = m[2].trim();
+        if (noY(b)) return op === '+' ? `(${other})-(${b})` : `(${other})+(${b})`;
       }
-      m = side.match(/^(.+?)\*?y$/i);
-      if (m && !containsY(m[1])) return `(${other})/(${m[1].trim()})`;
+
+      // (a)*y  أو  a*y
+      m = side.match(/^(?:\((.+?)\)|(.+?))\s*\*?\s*y$/i);
+      if (m) {
+        const a = (m[1] ?? m[2] ?? '').trim();
+        if (noY(a)) return `(${other})/(${a})`;
+      }
+
+      // y فقط
       if (/^y$/i.test(side)) return `${other}`;
-      m = side.match(/^(.+)\s*([+\-])\s*y$/i);
-      if (m && !containsY(m[1])) {
-        const otherOnSide=m[1].trim(), op=m[2];
-        return (op==='+')?`(${other})-(${otherOnSide})`:`(${otherOnSide})-(${other})`;
+
+      // other ± y
+      m = side.match(/^(.+)\s*([+\-])\s*(?:\(?\s*y\s*\)?)$/i);
+      if (m) {
+        const otherOnSide = stripOuterParens(m[1].trim()), op = m[2];
+        if (noY(otherOnSide)) return op === '+' ? `(${other})-(${otherOnSide})` : `(${otherOnSide})-(${other})`;
       }
-      m = side.match(/^(.+)\s*([+\-])\s*(.+?)\*?y$/i);
-      if (m && !containsY(m[1]) && !containsY(m[3])) {
-        const otherOnSide=m[1].trim(), op=m[2], a=m[3].trim();
-        return (op==='+')?`((${other})-(${otherOnSide}))/(${a})`:`((${otherOnSide})-(${other}))/(${a})`;
+
+      // other ± (a*y)
+      m = side.match(/^(.+)\s*([+\-])\s*\(?(?:\((.+?)\)|(.+?))\s*\*?\s*y\)?$/i);
+      if (m) {
+        const otherOnSide = stripOuterParens(m[1].trim()), op = m[2], a = stripOuterParens((m[3] ?? m[4] ?? '').trim());
+        if (noY(otherOnSide) && noY(a)) {
+          return op === '+'
+            ? `((${other})-(${otherOnSide}))/(${a})`
+            : `((${otherOnSide})-(${other}))/(${a})`;
+        }
       }
       return null;
     }
+
+    // جرّب y في الطرف الأيمن ثم الأيسر
     let js = solve(R0, L0); if (js) return js;
-    js = solve(L0, R0);    if (js) return js;
+    js = solve(L0, R0);     if (js) return js;
     return null;
   }
 
@@ -284,25 +333,31 @@
       const [lhsRaw, rhsRaw] = s.split('=');
       const lhs = preprocessBasic(lhsRaw), rhs = preprocessBasic(rhsRaw);
 
+      // بارامترية
       if (/x\(t\)\s*=/.test(lhs+rhs) && /y\(t\)\s*=/.test(lhs+rhs)) {
         const pair = preprocessBasic(s);
         const mx = pair.match(/x\(t\)\s*=\s*([^,;]+)[,;]/i);
         const my = pair.match(/y\(t\)\s*=\s*([^,;]+)/i);
         if (mx && my) return { kind:'param', xt: mx[1].trim(), yt: my[1].trim(), domain };
       }
+      // قطبية
       if (/r\((theta|ϴ|θ)\)\s*=/.test(lhs+rhs)) {
         const all = preprocessBasic(s);
         const mr = all.match(/r\((?:theta|ϴ|θ)\)\s*=\s*(.+)/i);
         if (mr) return { kind:'polar', rth: mr[1].trim(), domain };
       }
+      // y منفردة
       if (sideIsY(lhs)) return { kind:'explicit', js: preprocessBasic(rhsRaw), domain };
       if (sideIsY(rhs)) return { kind:'explicit', js: preprocessBasic(lhsRaw), domain };
 
+      // محاولة عزل خطي
       const solved = tryLinearSolveForY(lhsRaw, rhsRaw);
       if (solved) return { kind:'explicit', js: preprocessBasic(solved), domain };
 
+      // ضمني
       return { kind:'implicit', eq: preprocessBasic(s), domain };
     }
+    // بدون مساواة: y = expr(x)
     return { kind:'explicit', js: preprocessBasic(s), domain };
   }
 
@@ -337,7 +392,6 @@
 
     const step = niceStep(state.scale), sub = step/5;
 
-    // ✅ الزاويتان الصحيحـتان: أعلى يسار وأدنى يمين
     const tl = screenToWorld(0, 0);
     const br = screenToWorld(w, h);
 
@@ -372,7 +426,7 @@
       if(Math.abs(x)<1e-12) continue;
       const p=worldToScreen(x,0); ctx.fillText(toArabicDigits(x.toFixed(2).replace(/\.00$/,'')), p.x-4, sy0+6);
     }
-    // أرقام ص (على يسار محور ص)
+    // أرقام ص (يسار محور ص)
     ctx.textAlign='right'; ctx.textBaseline='bottom';
     for(let y=Math.floor(br.y/step)*step; y<=tl.y; y+=step){
       if(Math.abs(y)<1e-12) continue;
@@ -380,7 +434,7 @@
     }
   }
 
-  /* ---------- رسم ---------- */
+  /* ---------- أخذ عينات تكيفي ---------- */
   function adaptiveSampleX(f,left,right){
     const pts=[], maxDepth=12, eps=1e-2, N0=25;
     function rec(a,b,ya,yb,d){ const m=(a+b)/2; let ym=f(m); if(!isFinite(ya)) ya=f(a); if(!isFinite(yb)) yb=f(b);
@@ -394,6 +448,7 @@
     pts.sort((a,b)=>a[0]-b[0]); const out=[]; let prev=null; for(const p of pts){ if(!prev || p[0]!==prev[0]) out.push(p); prev=p; } return out;
   }
 
+  /* ---------- رسم المنحنيات ---------- */
   function drawPolylines(){
     state.polylines.length=0;
     const r=devicePixelRatio||1, w=canvas.width, viewL=screenToWorld(0,0).x, viewR=screenToWorld(w,0).x;
@@ -401,11 +456,10 @@
     for(const [i,ex] of state.expressions.entries()){
       if(!ex.visible) continue;
       const spec = normalizeExpr(ex.text);
-      const color = ex.color || COLORS[i%COLORS.length];
-      const width = Math.max(0.5, Number(ex.width||2)) * r;
+      ctx.strokeStyle = ex.color || COLORS[i%COLORS.length];
+      ctx.lineWidth   = Math.max(0.5, Number(ex.width||2)) * r;
 
-      let poly=[]; ctx.strokeStyle = color;
-
+      let poly=[];
       try{
         if(spec.kind==='explicit'){
           const f = makeFn1(spec.js);
@@ -413,49 +467,82 @@
           if(spec.domain && spec.domain.xmin) L = evalInScope(spec.domain.xmin);
           if(spec.domain && spec.domain.xmax) R = evalInScope(spec.domain.xmax);
           const pts = adaptiveSampleX(f, L, R);
-          ctx.lineWidth = width; ctx.beginPath(); let pen=false;
-          for(const [x,y] of pts){ const p=worldToScreen(x,y); if(!isFinite(p.x)||!isFinite(p.y)){ pen=false; continue; } if(!pen){ ctx.moveTo(p.x,p.y); pen=true; } else ctx.lineTo(p.x,p.y); poly.push([x,y]); }
+          ctx.beginPath(); let pen=false;
+          for(const [x,y] of pts){
+            const p=worldToScreen(x,y);
+            if(!isFinite(p.x)||!isFinite(p.y)) { pen=false; continue; }
+            if(!pen){ ctx.moveTo(p.x,p.y); pen=true; } else ctx.lineTo(p.x,p.y);
+            poly.push([x,y]);
+          }
           ctx.stroke();
         }
         else if(spec.kind==='implicit'){
-          const tl=screenToWorld(0,0), br=screenToWorld(canvas.width, canvas.height);
-          const nx=60, ny=40, dx=(br.x-tl.x)/nx, dy=(tl.y-br.y)/ny;
-          const F = (()=>{ const eq=spec.eq.replace('=','-(')+')'; return makeFn2(eq); })();
-          function val(x,y){ const v=F(x,y); return isFinite(v)?v:NaN; }
-          ctx.lineWidth = width;
-          for(let iy=0;iy<ny;iy++){
-            for(let ix=0;ix<nx;ix++){
-              const x0=tl.x+ix*dx, y0=tl.y-iy*dy, x1=x0+dx, y1=y0-dy;
-              const v00=val(x0,y0), v10=val(x1,y0), v01=val(x0,y1), v11=val(x1,y1);
-              const edges=[];
-              function lerp(a,b,ta,tb){ const t=ta/(ta-tb); return a+(b-a)*t; }
-              if(isFinite(v00)&&isFinite(v10)&&(v00>0)!=(v10>0)) edges.push([lerp(x0,x1,v00,v10),y0]);
-              if(isFinite(v10)&&isFinite(v11)&&(v10>0)!=(v11>0)) edges.push([x1,lerp(y0,y1,v10,v11)]);
-              if(isFinite(v01)&&isFinite(v11)&&(v01>0)!=(v11>0)) edges.push([lerp(x0,x1,v01,v11),y1]);
-              if(isFinite(v00)&&isFinite(v01)&&(v00>0)!=(v01>0)) edges.push([x0,lerp(y0,y1,v00,v01)]);
-              if(edges.length===2){ const p0=worldToScreen(edges[0][0],edges[0][1]), p1=worldToScreen(edges[1][0],edges[1][1]); ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke(); poly.push(edges[0],edges[1]); }
+          // ====== محاولة عزل عددي y(x) لو ضمني خطي في y ======
+          const F = (()=>{ const eq = spec.eq.replace('=','-(')+')'; return makeFn2(eq); })();
+          function yFromLinear(x){
+            const b = F(x, 0);
+            const a = F(x, 1) - b;      // تقريب لمعامل y
+            if (!isFinite(a) || Math.abs(a) < 1e-9) return NaN;
+            const y = -b / a;
+            const res = Math.abs(F(x, y));
+            return (isFinite(y) && res <= 1e-3*(1+Math.abs(y))) ? y : NaN;
+          }
+          const f = (x)=> yFromLinear(x);
+          const ptsExplicit = adaptiveSampleX(f, viewL, viewR);
+
+          if (ptsExplicit.length >= 20) {
+            ctx.beginPath(); let pen=false;
+            for (const [x,y] of ptsExplicit){
+              const p=worldToScreen(x,y);
+              if(!isFinite(p.x)||!isFinite(p.y)) { pen=false; continue; }
+              if(!pen){ ctx.moveTo(p.x,p.y); pen=true; } else ctx.lineTo(p.x,p.y);
+              poly.push([x,y]);
+            }
+            ctx.stroke();
+          } else {
+            // ====== رجوع للترسيم الضمني (Marching Squares) ======
+            const tl=screenToWorld(0,0), br=screenToWorld(canvas.width, canvas.height);
+            const nx=60, ny=40; const dx=(br.x-tl.x)/nx, dy=(tl.y-br.y)/ny;
+            function val(x,y){ const v=F(x,y); return isFinite(v)?v:NaN; }
+            for(let iy=0; iy<ny; iy++){
+              for(let ix=0; ix<nx; ix++){
+                const x0=tl.x+ix*dx, y0=tl.y-iy*dy; const x1=x0+dx, y1=y0-dy;
+                const v00=val(x0,y0), v10=val(x1,y0), v01=val(x0,y1), v11=val(x1,y1);
+                function lerp(a,b,ta,tb){ const t=ta/(ta-tb); return a + (b-a)*t; }
+                const edges=[];
+                if(isFinite(v00)&&isFinite(v10) && (v00>0)!=(v10>0)) edges.push([lerp(x0,x1,v00,v10), y0]);
+                if(isFinite(v10)&&isFinite(v11) && (v10>0)!=(v11>0)) edges.push([x1, lerp(y0,y1,v10,v11)]);
+                if(isFinite(v01)&&isFinite(v11) && (v01>0)!=(v11>0)) edges.push([lerp(x0,x1,v01,v11), y1]);
+                if(isFinite(v00)&&isFinite(v01) && (v00>0)!=(v01>0)) edges.push([x0, lerp(y0,y1,v00,v01)]);
+                if(edges.length===2){
+                  const p0=worldToScreen(edges[0][0], edges[0][1]);
+                  const p1=worldToScreen(edges[1][0], edges[1][1]);
+                  ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+                  poly.push(edges[0], edges[1]);
+                }
+              }
             }
           }
         }
         else if(spec.kind==='param'){
           const xt = Function('t', `with(this){return (${spec.xt});}`).bind(buildScope());
           const yt = Function('t', `with(this){return (${spec.yt});}`).bind(buildScope());
-          let t0=0,t1=2*Math.PI; if(spec.domain){ if(spec.domain.tmin) t0=evalInScope(spec.domain.tmin,{t:0}); if(spec.domain.tmax) t1=evalInScope(spec.domain.tmax,{t:0}); }
-          const steps=800, dt=(t1-t0)/steps; ctx.lineWidth=width; ctx.beginPath();
-          for(let i=0;i<=steps;i++){ const t=t0+i*dt, x=xt(t), y=yt(t), p=worldToScreen(x,y); if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); poly.push([x,y]); }
+          let t0=0, t1=2*Math.PI; if(spec.domain){ if(spec.domain.tmin) t0=evalInScope(spec.domain.tmin,{t:0}); if(spec.domain.tmax) t1=evalInScope(spec.domain.tmax,{t:0}); }
+          const steps=800; const dt=(t1-t0)/steps;
+          ctx.beginPath();
+          for(let i=0;i<=steps;i++){ const t=t0+i*dt; const x=xt(t), y=yt(t); const p=worldToScreen(x,y); if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); poly.push([x,y]); }
           ctx.stroke();
         }
         else if(spec.kind==='polar'){
           const fr = Function('theta', `with(this){return (${spec.rth});}`).bind(buildScope());
           let th0=0, th1=2*Math.PI; if(spec.domain){ if(spec.domain.thmin) th0=evalInScope(spec.domain.thmin,{theta:0}); if(spec.domain.thmax) th1=evalInScope(spec.domain.thmax,{theta:0}); }
-          const steps=800, d=(th1-th0)/steps; ctx.lineWidth=width; ctx.beginPath();
-          for(let i=0;i<=steps;i++){ const th=th0+i*d, r0=fr(th), x=r0*Math.cos(th), y=r0*Math.sin(th), p=worldToScreen(x,y); if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); poly.push([x,y]); }
+          const steps=800; const d=(th1-th0)/steps;
+          ctx.beginPath();
+          for(let i=0;i<=steps;i++){ const th=th0+i*d; const r0=fr(th); const x=r0*Math.cos(th), y=r0*Math.sin(th); const p=worldToScreen(x,y); if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); poly.push([x,y]); }
           ctx.stroke();
         }
-      }catch(err){ markExprError(ex.id, err.message); continue; }
-
-      clearExprError(ex.id);
-      state.polylines.push({id:ex.id,color,points:poly});
+      } catch(err){ markExprError(ex.id, err.message); continue; }
+      clearExprError(ex.id); state.polylines.push({id:ex.id,color:ctx.strokeStyle,points:poly});
     }
   }
 
@@ -525,13 +612,11 @@
       inp.className='input expr expr-input';
       inp.placeholder='مثال: ص = س^2 | س + ص = ٤ | ٢س + ص = ٥ | س*ص = ١';
       inp.value=ex.text||'';
+      // عرض الأرقام التي تُكتب بالعربية تلقائيًا
       inp.addEventListener('input', () => {
         const start=inp.selectionStart, end=inp.selectionEnd;
         const before=inp.value, after=toArabicDigits(before);
-        if (before!==after) {
-          inp.value=after;
-          inp.setSelectionRange(start, end);
-        }
+        if (before!==after) { inp.value=after; inp.setSelectionRange(start, end); }
         ex.text = inp.value;
         draw(); persistDeb();
       });
@@ -657,7 +742,7 @@
   /* ---------- حالة/مشاركة ---------- */
   function updateStatus(){ statusEl.textContent = `س = ${toArabicDigits(state.mouse.wx.toFixed(3))}, ص = ${toArabicDigits(state.mouse.wy.toFixed(3))} | مقياس: 1u ≈ ${Math.round(state.scale)}px`; }
   function flash(msg){ const old=statusEl.textContent; statusEl.textContent=msg; setTimeout(()=>statusEl.textContent=old, 1200); }
-  function serialize(){ return { v:7, cx:state.centerX, cy:state.centerY, sc:state.scale, theme:state.theme, expr: state.expressions.map(e=>({t:e.text,c:e.color,w:e.width,v:!!e.visible})), sliders: state.sliders }; }
+  function serialize(){ return { v:8, cx:state.centerX, cy:state.centerY, sc:state.scale, theme:state.theme, expr: state.expressions.map(e=>({t:e.text,c:e.color,w:e.width,v:!!e.visible})), sliders: state.sliders }; }
   function deserialize(o){
     if(!o) return;
     if(typeof o.cx==='number') state.centerX=o.cx;
