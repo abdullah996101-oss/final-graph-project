@@ -326,35 +326,44 @@
   function resizeCanvas(){ const r=devicePixelRatio||1,rect=canvas.getBoundingClientRect(); canvas.width=Math.max(1,Math.floor(rect.width*r)); canvas.height=Math.max(1,Math.floor(rect.height*r)); draw(); }
   new ResizeObserver(resizeCanvas).observe(document.querySelector('.canvas-wrap'));
 
-  /* ---------- شبكة ومحاور ---------- */
+  /* ---------- شبكة ومحاور (تم إصلاح حدود المشهد) ---------- */
   function niceStep(ppu){ const target=110, units=target/ppu, p=Math.pow(10, Math.floor(Math.log10(units))); const c=[1,2,5,10].map(v=>v*p); let best=c[0]; for(const v of c) if(Math.abs(v-units)<Math.abs(best-units)) best=v; return best; }
   function drawGrid(){
     const r=devicePixelRatio||1, w=canvas.width, h=canvas.height;
-    ctx.clearRect(0,0,w,h);
-    ctx.fillStyle = cssVar('--bg'); ctx.fillRect(0,0,w,h);
 
-    const step = niceStep(state.scale), sub = step/5, tl=screenToWorld(0,0), br=screenToWorld(w,0);
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = cssVar('--bg');
+    ctx.fillRect(0,0,w,h);
+
+    const step = niceStep(state.scale), sub = step/5;
+
+    // ✅ الزاويتان الصحيحـتان: أعلى يسار وأدنى يمين
+    const tl = screenToWorld(0, 0);
+    const br = screenToWorld(w, h);
 
     // فرعية
     ctx.lineWidth=1; ctx.strokeStyle=cssVar('--grid-sub'); ctx.beginPath();
     for(let x=Math.floor(tl.x/sub)*sub; x<=br.x; x+=sub){ const sx=worldToScreen(x,0).x; ctx.moveTo(sx+.5,0); ctx.lineTo(sx+.5,h); }
-    for(let y=Math.floor((screenToWorld(0,h).y)/sub)*sub; y<=screenToWorld(0,0).y; y+=sub){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
+    for(let y=Math.floor(br.y/sub)*sub; y<=tl.y; y+=sub){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
     ctx.stroke();
 
     // رئيسية
     ctx.strokeStyle=cssVar('--grid'); ctx.beginPath();
     for(let x=Math.floor(tl.x/step)*step; x<=br.x; x+=step){ const sx=worldToScreen(x,0).x; ctx.moveTo(sx+.5,0); ctx.lineTo(sx+.5,h); }
-    for(let y=Math.floor((screenToWorld(0,h).y)/step)*step; y<=screenToWorld(0,0).y; y+=step){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
+    for(let y=Math.floor(br.y/step)*step; y<=tl.y; y+=step){ const sy=worldToScreen(0,y).y; ctx.moveTo(0,sy+.5); ctx.lineTo(w,sy+.5); }
     ctx.stroke();
 
     // محاور
     ctx.strokeStyle=cssVar('--axis'); ctx.lineWidth=1.5; ctx.beginPath();
-    const sx0=worldToScreen(0,0).x, sy0=worldToScreen(0,0).y; ctx.moveTo(sx0+.5,0); ctx.lineTo(sx0+.5,h); ctx.moveTo(0,sy0+.5); ctx.lineTo(w,sy0+.5); ctx.stroke();
+    const sx0=worldToScreen(0,0).x, sy0=worldToScreen(0,0).y;
+    ctx.moveTo(sx0+.5,0); ctx.lineTo(sx0+.5,h);
+    ctx.moveTo(0,sy0+.5); ctx.lineTo(w,sy0+.5);
+    ctx.stroke();
 
     // تسميات
     ctx.fillStyle = cssVar('--axis');
     ctx.font = `${12*r}px system-ui, -apple-system, Segoe UI, Noto Sans Arabic, Arial`;
-    ctx.textAlign='right'; ctx.textBaseline='top'; ctx.fillText('س', Math.min(w-6,w-6), sy0 + 6);
+    ctx.textAlign='right'; ctx.textBaseline='top';    ctx.fillText('س', Math.min(w-6,w-6), sy0 + 6);
     ctx.textAlign='left';  ctx.textBaseline='bottom'; ctx.fillText('ص', sx0 + 6, Math.max(12,12));
 
     // أرقام س (تحت المحور)
@@ -365,7 +374,7 @@
     }
     // أرقام ص (على يسار محور ص)
     ctx.textAlign='right'; ctx.textBaseline='bottom';
-    for(let y=Math.floor((screenToWorld(0,h).y)/step)*step; y<=screenToWorld(0,0).y; y+=step){
+    for(let y=Math.floor(br.y/step)*step; y<=tl.y; y+=step){
       if(Math.abs(y)<1e-12) continue;
       const p=worldToScreen(0,y); ctx.fillText(toArabicDigits(y.toFixed(2).replace(/\.00$/,'')), sx0 - 6, p.y - 2);
     }
@@ -521,7 +530,6 @@
         const before=inp.value, after=toArabicDigits(before);
         if (before!==after) {
           inp.value=after;
-          // نفس الطول (استبدال رقم برقم) => المؤشر يظل كما هو
           inp.setSelectionRange(start, end);
         }
         ex.text = inp.value;
