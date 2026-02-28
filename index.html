@@ -196,29 +196,57 @@
 
   /* ---------- تطبيع + ضرب ضمني ---------- */
   function preprocessBasic(s){
-    s = toEnglishDigits(String(s))
-      .replace(/[سx]/gi,'x').replace(/[صy]/gi,'y').replace(/[θϴ]/g,'theta')
-      .replace(/π|باي/gi,'PI').replace(/هـ/g,'E')
-      .replace(/[÷]/g,'/').replace(/[×]/g,'*').replace(/\^/g,'**');
+  // 0) تأكد أنها سلسلة
+  s = String(s);
 
-    arabicPairs.forEach(([re,rep]) => s = s.replace(re, rep));
-    s = s.replace(/\bln\(/g,'log(');
+  // 1) إزالة محارف الاتجاه/التحكم غير المرئية التي تسبب فشل الـRegex/التقييم
+  //   U+200E, U+200F, U+061C, U+202A..U+202E, U+2066..U+2069
+  s = s.replace(/[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]/g, '');
 
-    const FN='(sin|cos|tan|sqrt|abs|log)';
-    s = s
-      .replace(/(\d)\s*(x|y|theta|t|PI|E|\()/gi,'$1*$2')
-      .replace(/(x|y|theta|t|PI|E|\))\s*(\d|\()/gi,'$1*$2')
-      .replace(new RegExp(`(\\d|x|y|theta|t|PI|E)\\s*${FN}`,'gi'),'$1*$2')
-      .replace(new RegExp(`\\)\\s*${FN}`,'gi'),')*$1')
-      .replace(/\)\s*\(/g,')*(')
-      .replace(/(x|y|theta|t)\s*(PI|E)/gi,'$1*$2')
-      .replace(/(PI|E)\s*(x|y|theta|t)/gi,'$1*$2');
+  // 2) تطبيع العلامات إلى ASCII
+  //   − (U+2212), – (en dash), — (em dash), － (fullwidth minus)
+  s = s.replace(/[−–—－]/g, '-');
+  //   ＋ (fullwidth plus)
+  s = s.replace(/＋/g, '+');
 
-    return s.replace(/\s+/g,' ').trim();
-  }
-  const containsY = s => /\by\b/i.test(String(s));
-  const sideIsY   = raw => /^y$/i.test(preprocessBasic(raw).trim());
+  // 3) أرقام عربية -> إنجليزية + فاصلة عربية -> إنجليزية
+  s = toEnglishDigits(s).replace(/،/g, ',');
 
+  // 4) تطبيع الرموز والمتغيرات
+  s = s
+    .replace(/[سx]/gi,'x')
+    .replace(/[صy]/gi,'y')
+    .replace(/[θϴ]/g,'theta')
+    .replace(/π|باي/gi,'PI')
+    .replace(/هـ/g,'E')
+    .replace(/[÷]/g,'/')
+    .replace(/[×]/g,'*')
+    .replace(/\^/g,'**');
+
+  // 5) ترجمة أسماء الدوال العربية
+  arabicPairs.forEach(([re, rep]) => { s = s.replace(re, rep); });
+  s = s.replace(/\bln\(/g, 'log('); // ln -> log
+
+  // 6) إدخال الضرب الضمني
+  const FN = '(sin|cos|tan|sqrt|abs|log)';
+  s = s
+    // رقم قبل متغير/قوس
+    .replace(/(\d)\s*(x|y|theta|t|PI|E|\()/gi, '$1*$2')
+    // متغير/قوس قبل رقم/قوس
+    .replace(/(x|y|theta|t|PI|E|\))\s*(\d|\()/gi, '$1*$2')
+    // قبل دالة
+    .replace(new RegExp(`(\\d|x|y|theta|t|PI|E)\\s*${FN}`,'gi'), '$1*$2')
+    // ) قبل دالة
+    .replace(new RegExp(`\\)\\s*${FN}`,'gi'), ')*$1')
+    // )(
+    .replace(/\)\s*\(/g, ')*(')
+    // xPI أو PIx
+    .replace(/(x|y|theta|t)\s*(PI|E)/gi, '$1*$2')
+    .replace(/(PI|E)\s*(x|y|theta|t)/gi, '$1*$2');
+
+  // 7) تنظيف المسافات
+  return s.replace(/\s+/g, ' ').trim();
+}
   /* ---------- إزالة أقواس خارجية زائدة ---------- */
   function stripOuterParens(s){
     s = String(s).trim();
@@ -365,7 +393,10 @@
   }
 
   /* ---------- تقييم ---------- */
-  const isSafe = expr => /^[0-9+\-*/().,\sxa-zA-Z_]*\**[0-9+\-*/().,\sxa-zA-Z_]*$/.test(expr);
+  const isSafe = (expr) => {
+  // بعد preprocessBasic المفروض ما يبقى إلا هذي المجموعة
+  return /^[0-9+\-*/()., xytahinselcogqrtpIEnA-Z_]*$/i.test(expr);
+};
   function buildScope(vars){
     const scope = Object.create(Math);
     scope.log10 = (v)=>Math.log10(v);
